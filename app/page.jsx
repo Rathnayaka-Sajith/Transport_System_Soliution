@@ -4,6 +4,7 @@ import HeroSlider from '@/components/HeroSlider';
 import BookingWidget from '@/components/BookingWidget';
 import ImageSlot from '@/components/ImageSlot';
 import VisionCardDeck from '@/components/VisionCardDeck';
+import VisionMissionContent from '@/components/VisionMissionContent';
 
 export const metadata = {
   title: "Sri Lanka's Best Public Transport | PNG Express",
@@ -17,34 +18,13 @@ export default function HomePage() {
       <HeroSlider />
 
       {/* Vision and Mission Section */}
-      <section className="section">
+      <section className="section" style={{ overflow: 'hidden' }}>
         <div className="container">
           <div className="vision-mission-grid">
             <div className="vision-mission-img-wrap">
               <VisionCardDeck />
             </div>
-            <div>
-              <span className="section-subtitle">Welcome to PNG EXPRESS</span>
-              <h2 className="section-title">Our Vision and Mission</h2>
-              <p className="section-description" style={{ marginBottom: '2rem' }}>
-                Driving towards excellence with a profound commitment to comfort, passenger safety, and punctuality across Sri Lanka.
-              </p>
-
-              <div className="vision-card">
-                <div className="card-label">Our Vision</div>
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: '#0f172a' }}>Connecting People, Transforming Journeys.</h3>
-                <p style={{ margin: 0, fontSize: '0.95rem', color: '#475569' }}>
-                  To be Sri Lanka's leading, most trusted mobility network, revolutionizing inter-city and regional public transit with sustainable, modern coaches.
-                </p>
-              </div>
-
-              <div className="mission-card">
-                <div className="card-label">Our Mission</div>
-                <p style={{ margin: 0, fontSize: '0.95rem', color: '#475569' }}>
-                  At PNG Express, our mission is to provide exceptional passenger service, focusing on luxury long-distance travel, safe school bus services, and versatile vehicle rentals, all with a commitment to enhancing lives and fostering thriving communities. We are dedicated to revolutionising the transportation experience for our passengers, emphasising safety, comfort, and sustainability.
-                </p>
-              </div>
-            </div>
+            <VisionMissionContent />
           </div>
         </div>
       </section>

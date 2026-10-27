@@ -139,13 +139,6 @@ export default function VisionCardDeck() {
     return () => observer.disconnect();
   }, []);
 
-  const handleReThrow = () => {
-    setIsThrown(false);
-    setTimeout(() => {
-      setIsThrown(true);
-    }, 120);
-  };
-
   return (
     <div className="vision-deck-stage" ref={containerRef}>
       {/* Decorative Stage Mat Glow */}
@@ -163,26 +156,6 @@ export default function VisionCardDeck() {
             setActiveIndex={setActiveIndex}
           />
         ))}
-      </div>
-
-      {/* Interactive Deck Bar */}
-      <div className="vision-deck-actions">
-        <button
-          type="button"
-          onClick={handleReThrow}
-          className="deck-rethrow-btn"
-          title="Re-throw cards transition"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10"/>
-            <polyline points="1 20 1 14 7 14"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-          </svg>
-          <span>Throw Cards Again</span>
-        </button>
-        <span className="deck-hint-text">
-          Hover any card to raise & inspect
-        </span>
       </div>
     </div>
   );

@@ -1562,44 +1562,44 @@ select.form-control {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-/* Re-throw Action Bar */
-.vision-deck-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ========================================================
+   Vision & Mission Slide-In Animation (from Right, 20% to 100% opacity)
+   ======================================================== */
+.vm-slide-container {
   width: 100%;
-  max-width: 440px;
-  margin-top: 1rem;
-  padding: 0 0.5rem;
 }
 
-.deck-rethrow-btn {
-  background: rgba(4, 107, 210, 0.08);
-  border: 1px solid rgba(4, 107, 210, 0.25);
-  color: var(--primary);
-  border-radius: 9999px;
-  padding: 0.4rem 1rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  cursor: pointer;
-  transition: all 0.25s ease;
+.vm-slide-container.vm-slide-start .vm-slide-item {
+  opacity: 0.2;
+  transform: translate3d(90px, 0, 0);
+  pointer-events: none;
 }
 
-.deck-rethrow-btn:hover {
-  background: var(--primary);
-  color: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 14px rgba(4, 107, 210, 0.3);
+.vm-slide-container.vm-slide-in .vm-slide-item {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
 }
 
-.deck-hint-text {
-  font-size: 0.74rem;
-  color: #64748b;
-  font-style: italic;
+.vm-slide-item {
+  will-change: transform, opacity;
+  transition:
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.vm-slide-header {
+  transition-delay: 0.05s;
+}
+
+.vm-slide-container .vision-card {
+  transition-delay: 0.16s;
+}
+
+.vm-slide-container .mission-card {
+  transition-delay: 0.28s;
+}
+
 
 @media (max-width: 640px) {
   .vision-deck-cards-wrapper {
