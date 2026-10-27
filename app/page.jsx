@@ -3,6 +3,7 @@ import Link from 'next/link';
 import HeroSlider from '@/components/HeroSlider';
 import BookingWidget from '@/components/BookingWidget';
 import ImageSlot from '@/components/ImageSlot';
+import VisionCardDeck from '@/components/VisionCardDeck';
 
 export const metadata = {
   title: "Sri Lanka's Best Public Transport | PNG Express",
@@ -20,14 +21,7 @@ export default function HomePage() {
         <div className="container">
           <div className="vision-mission-grid">
             <div className="vision-mission-img-wrap">
-              <ImageSlot
-                title="Fleet Vision & Operations Slot"
-                subtitle="Excellence in Mobility [800x600]"
-                aspectRatio="4/3"
-                category="Vision Showcase Slot"
-                dimensions="800 x 600 px"
-                icon="bus"
-              />
+              <VisionCardDeck />
             </div>
             <div>
               <span className="section-subtitle">Welcome to PNG EXPRESS</span>
