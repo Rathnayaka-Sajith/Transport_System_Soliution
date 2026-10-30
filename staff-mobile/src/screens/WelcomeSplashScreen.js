@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   StatusBar,
   Animated,
-  ActivityIndicator,
   TouchableOpacity,
   Platform,
 } from 'react-native';
@@ -17,17 +16,16 @@ export default function WelcomeSplashScreen({ onContinue }) {
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.85)).current;
   const textOpacity = useRef(new Animated.Value(0)).current; // 0% to 100% opacity
-  const textTranslateY = useRef(new Animated.Value(18)).current;
-  const footerOpacity = useRef(new Animated.Value(0)).current;
+  const textTranslateY = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
-    // 1. Entrance animation sequence
+    // 1. Smooth entrance animation sequence
     Animated.sequence([
-      // First, pop in the bus logo with subtle scale & fade
+      // First, gently pop in the bus emblem with scale & fade
       Animated.parallel([
         Animated.timing(logoOpacity, {
           toValue: 1,
-          duration: 800,
+          duration: 750,
           useNativeDriver: true,
         }),
         Animated.spring(logoScale, {
@@ -49,20 +47,15 @@ export default function WelcomeSplashScreen({ onContinue }) {
           duration: 900,
           useNativeDriver: true,
         }),
-        Animated.timing(footerOpacity, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
       ]),
     ]).start();
 
-    // 2. Automatically navigate to login page after greeting presentation (~2.8 seconds)
+    // 2. Automatically navigate to login page
     const autoNavTimer = setTimeout(() => {
       if (onContinue) {
         onContinue();
       }
-    }, 2800);
+    }, 2600);
 
     return () => clearTimeout(autoNavTimer);
   }, [onContinue]);
@@ -77,9 +70,7 @@ export default function WelcomeSplashScreen({ onContinue }) {
         activeOpacity={1}
         onPress={onContinue}
       >
-        <View style={styles.topSpacer} />
-
-        {/* Central Identity Section */}
+        {/* Central Identity Section - Perfectly Centered */}
         <View style={styles.centralContainer}>
           {/* Animated Bus Icon Emblem */}
           <Animated.View
@@ -113,19 +104,6 @@ export default function WelcomeSplashScreen({ onContinue }) {
             <Text style={styles.taglineText}>Your Trusted Transport Service</Text>
           </Animated.View>
         </View>
-
-        {/* Bottom Section: Ambient Loader & iOS Home Indicator */}
-        <Animated.View style={[styles.bottomContainer, { opacity: footerOpacity }]}>
-          <View style={styles.loaderRow}>
-            <ActivityIndicator size="small" color="#FFFFFF" />
-            <Text style={styles.loadingStatusText}>Starting Portal...</Text>
-          </View>
-
-          <Text style={styles.skipHintText}>Tap anywhere to continue</Text>
-
-          {/* iOS 18 / iPhone 16 Home Indicator Bar */}
-          <View style={styles.homeIndicator} />
-        </Animated.View>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -147,12 +125,9 @@ const styles = StyleSheet.create({
   },
   touchableBackdrop: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-  },
-  topSpacer: {
-    height: 48,
   },
 
   // Central Identity Container
@@ -212,38 +187,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-  },
-
-  // Bottom Safe Area Section
-  bottomContainer: {
-    width: '100%',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-  },
-  loaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  loadingStatusText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-  },
-  skipHintText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-    marginBottom: 16,
-  },
-  homeIndicator: {
-    width: 134,
-    height: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 3,
   },
 });
