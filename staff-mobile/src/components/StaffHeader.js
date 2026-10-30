@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,21 +10,6 @@ import {
 
 export default function StaffHeader({ user, activeRole, onSwitchRole, onLogout }) {
   const [showIdModal, setShowIdModal] = useState(false);
-  const [shiftSeconds, setShiftSeconds] = useState(9940); // Initialized to ~2h 45m for realism
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setShiftSeconds((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatShiftTime = (totalSec) => {
-    const hrs = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
-    return `${hrs.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
-  };
 
   const getRoleIcon = (role) => {
     switch (role) {
@@ -56,12 +41,7 @@ export default function StaffHeader({ user, activeRole, onSwitchRole, onLogout }
           <View style={styles.avatarRow}>
             <Text style={styles.staffAvatar}>{user?.avatar || '👨‍✈️'}</Text>
             <View>
-              <Text style={styles.brandTitle}>🚍 PNG EXPRESS • ID CARD 🪪</Text>
               <Text style={styles.staffName}>{user?.name || 'Staff Member'}</Text>
-              <View style={styles.shiftPill}>
-                <View style={styles.greenPulse} />
-                <Text style={styles.shiftTime}>Duty: {formatShiftTime(shiftSeconds)}</Text>
-              </View>
             </View>
           </View>
         </TouchableOpacity>
@@ -198,34 +178,11 @@ const styles = StyleSheet.create({
   staffAvatar: {
     fontSize: 28,
   },
-  brandTitle: {
-    color: '#006FD8',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
   staffName: {
     color: '#0F172A',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '800',
-    marginTop: 1,
-  },
-  shiftPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  greenPulse: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10b981',
-  },
-  shiftTime: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   rightCol: {
     flexDirection: 'row',
