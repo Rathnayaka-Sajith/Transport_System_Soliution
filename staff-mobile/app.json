@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "PNG Express Staff",
+    "slug": "png-express-staff",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b1329"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pngexpress.staff",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PNG Express Staff uses your camera to scan and verify passenger digital QR tickets.",
+        "NSLocationWhenInUseUsageDescription": "PNG Express Staff uses your location to track bus routes and assist with emergency roadside breakdown dispatch."
+      }
+    },
+    "android": {
+      "package": "com.pngexpress.staff",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#046bd2"
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
