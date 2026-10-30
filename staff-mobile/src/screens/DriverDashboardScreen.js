@@ -154,7 +154,7 @@ export default function DriverDashboardScreen({ user }) {
 
       {/* Route Timeline */}
       <View style={styles.timelineCard}>
-        <Text style={styles.checklistTitle}>📍 Route Stops &amp; Waypoints</Text>
+        <Text style={styles.checklistTitle}>📍 Route Stops & Waypoints</Text>
         {MOCK_DRIVER_TRIP.stops.map((stop, i) => (
           <View key={i} style={styles.timelineRow}>
             <Text style={styles.timelineDot}>

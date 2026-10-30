@@ -49,7 +49,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateRegister, staffL
 
       <Text style={styles.title}>Staff Sign In</Text>
       <Text style={styles.subtitle}>
-        Unified operational portal for Drivers, Conductors &amp; Fleet Mechanics
+        Unified operational portal for Drivers, Conductors & Fleet Mechanics
       </Text>
 
       {errorMsg ? (
@@ -95,7 +95,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateRegister, staffL
 
       {/* Quick Demo One-Click Accounts */}
       <View style={styles.demoBox}>
-        <Text style={styles.demoTitle}>QUICK TEST ACCOUNTS (MULTI-ROLE &amp; SINGLE):</Text>
+        <Text style={styles.demoTitle}>QUICK TEST ACCOUNTS (MULTI-ROLE & SINGLE):</Text>
         
         <View style={styles.demoGrid}>
           {INITIAL_STAFF_USERS.slice(0, 4).map((user) => (

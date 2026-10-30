@@ -45,7 +45,7 @@ export default function MechanicDashboardScreen({ user }) {
       {/* Banner */}
       <View style={styles.banner}>
         <View style={styles.bannerBadge}>
-          <Text style={styles.bannerBadgeText}>FLEET ENGINEERING &amp; RESCUE</Text>
+          <Text style={styles.bannerBadgeText}>FLEET ENGINEERING & RESCUE</Text>
         </View>
         <Text style={styles.bannerTitle}>Workshop Operations</Text>
         <Text style={styles.bannerSub}>
@@ -71,7 +71,7 @@ export default function MechanicDashboardScreen({ user }) {
 
       {/* Active Job Cards */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>🔧 Fleet Job Cards &amp; Roadside Calls</Text>
+        <Text style={styles.sectionTitle}>🔧 Fleet Job Cards & Roadside Calls</Text>
       </View>
 
       {jobCards.map((job) => {
@@ -142,12 +142,12 @@ export default function MechanicDashboardScreen({ user }) {
                 onPress={() => handleCertifyRoadworthy(job.jobId, job.busPlate)}
               >
                 <Text style={styles.btnCertifyText}>
-                  ✓ Sign Off &amp; Certify Bus as Roadworthy
+                  ✓ Sign Off & Certify Bus as Roadworthy
                 </Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.completedTag}>
-                <Text style={styles.completedTagText}>✓ Bus Certified Roadworthy &amp; Dispatched</Text>
+                <Text style={styles.completedTagText}>✓ Bus Certified Roadworthy & Dispatched</Text>
               </View>
             )}
           </View>

@@ -4,7 +4,30 @@ import {
   SafeAreaView,
   StatusBar,
   View,
+  Platform,
+  Alert,
 } from 'react-native';
+
+// Web compatibility polyfill for Alert.alert
+if (Platform.OS === 'web') {
+  Alert.alert = (title, message, buttons) => {
+    if (buttons && buttons.length > 1) {
+      const confirmed = window.confirm(`${title || ''}\n\n${message || ''}`);
+      if (confirmed) {
+        const okBtn = buttons.find((b) => b.style !== 'cancel' && b.text !== 'Cancel') || buttons[buttons.length - 1];
+        if (okBtn && okBtn.onPress) okBtn.onPress();
+      } else {
+        const cancelBtn = buttons.find((b) => b.style === 'cancel' || b.text === 'Cancel');
+        if (cancelBtn && cancelBtn.onPress) cancelBtn.onPress();
+      }
+    } else {
+      window.alert(`${title || ''}${message ? `\n\n${message}` : ''}`);
+      if (buttons && buttons[0] && buttons[0].onPress) {
+        buttons[0].onPress();
+      }
+    }
+  };
+}
 
 import { INITIAL_STAFF_USERS } from './src/data/mockDatabase';
 import StaffHeader from './src/components/StaffHeader';
@@ -68,47 +91,49 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1329" />
 
-      {/* Persistent Header when logged in */}
-      {currentUser && currentScreen === 'dashboard' ? (
-        <StaffHeader
-          user={currentUser}
-          activeRole={activeRole}
-          onSwitchRole={handleSwitchDuty}
-          onLogout={handleLogout}
-        />
-      ) : null}
-
-      <View style={styles.screenBody}>
-        {currentScreen === 'login' && (
-          <LoginScreen
-            staffList={staffUsers}
-            onLoginSuccess={handleLoginSuccess}
-            onNavigateRegister={() => setCurrentScreen('register')}
-          />
-        )}
-
-        {currentScreen === 'register' && (
-          <RegisterScreen
-            onRegisterSuccess={handleRegisterSuccess}
-            onBackToLogin={() => setCurrentScreen('login')}
-          />
-        )}
-
-        {currentScreen === 'select-role' && currentUser && (
-          <RoleSelectorScreen
+      <View style={styles.phoneFrame}>
+        {/* Persistent Header when logged in */}
+        {currentUser && currentScreen === 'dashboard' ? (
+          <StaffHeader
             user={currentUser}
-            onSelectRole={handleSelectRole}
-            onCancel={activeRole ? () => setCurrentScreen('dashboard') : null}
+            activeRole={activeRole}
+            onSwitchRole={handleSwitchDuty}
+            onLogout={handleLogout}
           />
-        )}
+        ) : null}
 
-        {currentScreen === 'dashboard' && currentUser && (
-          <>
-            {activeRole === 'driver' && <DriverDashboardScreen user={currentUser} />}
-            {activeRole === 'conductor' && <ConductorDashboardScreen user={currentUser} />}
-            {activeRole === 'mechanic' && <MechanicDashboardScreen user={currentUser} />}
-          </>
-        )}
+        <View style={styles.screenBody}>
+          {currentScreen === 'login' && (
+            <LoginScreen
+              staffList={staffUsers}
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateRegister={() => setCurrentScreen('register')}
+            />
+          )}
+
+          {currentScreen === 'register' && (
+            <RegisterScreen
+              onRegisterSuccess={handleRegisterSuccess}
+              onBackToLogin={() => setCurrentScreen('login')}
+            />
+          )}
+
+          {currentScreen === 'select-role' && currentUser && (
+            <RoleSelectorScreen
+              user={currentUser}
+              onSelectRole={handleSelectRole}
+              onCancel={activeRole ? () => setCurrentScreen('dashboard') : null}
+            />
+          )}
+
+          {currentScreen === 'dashboard' && currentUser && (
+            <>
+              {activeRole === 'driver' && <DriverDashboardScreen user={currentUser} />}
+              {activeRole === 'conductor' && <ConductorDashboardScreen user={currentUser} />}
+              {activeRole === 'mechanic' && <MechanicDashboardScreen user={currentUser} />}
+            </>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -118,6 +143,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0b1329',
+    ...(Platform.OS === 'web' ? { minHeight: '100vh', width: '100%', alignItems: 'center' } : {}),
+  },
+  phoneFrame: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#0b1329',
+    ...(Platform.OS === 'web'
+      ? {
+          maxWidth: 500,
+          minHeight: '100vh',
+          boxShadow: '0 0 40px rgba(0,0,0,0.6)',
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: '#1e293b',
+        }
+      : {}),
   },
   screenBody: {
     flex: 1,
