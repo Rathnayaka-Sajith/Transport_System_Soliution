@@ -1,103 +1,132 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  TouchableOpacity,
+  Image,
   SafeAreaView,
   StatusBar,
-  Dimensions,
+  Animated,
+  ActivityIndicator,
+  TouchableOpacity,
   Platform,
 } from 'react-native';
 
-const { width } = Dimensions.get('window');
-
 export default function WelcomeSplashScreen({ onContinue }) {
+  // Animation Values
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.85)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current; // 0% to 100% opacity
+  const textTranslateY = useRef(new Animated.Value(18)).current;
+  const footerOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // 1. Entrance animation sequence
+    Animated.sequence([
+      // First, pop in the bus logo with subtle scale & fade
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(logoScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 50,
+          useNativeDriver: true,
+        }),
+      ]),
+      // Then, smoothly fade in the typography from 0% opacity to 100% opacity
+      Animated.parallel([
+        Animated.timing(textOpacity, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(textTranslateY, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(footerOpacity, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    // 2. Automatically navigate to login page after greeting presentation (~2.8 seconds)
+    const autoNavTimer = setTimeout(() => {
+      if (onContinue) {
+        onContinue();
+      }
+    }, 2800);
+
+    return () => clearTimeout(autoNavTimer);
+  }, [onContinue]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#006FD8" />
 
-      {/* Top Ambient Glow / iOS Safe Spacing */}
-      <View style={styles.topSpacer} />
+      {/* Tap anywhere to skip straight to login */}
+      <TouchableOpacity
+        style={styles.touchableBackdrop}
+        activeOpacity={1}
+        onPress={onContinue}
+      >
+        <View style={styles.topSpacer} />
 
-      {/* Main Central Brand Identity */}
-      <View style={styles.centralContainer}>
-        {/* Stylized 2D Bus Icon Emblem */}
-        <View style={styles.iconEmblem}>
-          <View style={styles.busSilhouette}>
-            {/* Coach Roof & Destination Display */}
-            <View style={styles.coachRoof}>
-              <View style={styles.destBoardCutout} />
-            </View>
+        {/* Central Identity Section */}
+        <View style={styles.centralContainer}>
+          {/* Animated Bus Icon Emblem */}
+          <Animated.View
+            style={[
+              styles.iconEmblem,
+              {
+                opacity: logoOpacity,
+                transform: [{ scale: logoScale }],
+              },
+            ]}
+          >
+            <Image
+              source={require('../../assets/bus-logo.png')}
+              style={styles.busLogoImage}
+              resizeMode="contain"
+            />
+          </Animated.View>
 
-            {/* Main Window Cabin Section */}
-            <View style={styles.cabinRow}>
-              {/* Slanted Aerodynamic Windshield */}
-              <View style={styles.windshield} />
-              {/* Panoramic Side Passenger Windows */}
-              <View style={styles.passengerWindow} />
-              <View style={styles.passengerWindow} />
-              <View style={styles.passengerWindow} />
-              <View style={styles.passengerWindowSmall} />
-            </View>
+          {/* Animated Brand Typography (0% to 100% opacity) */}
+          <Animated.View
+            style={[
+              styles.brandTextBlock,
+              {
+                opacity: textOpacity,
+                transform: [{ translateY: textTranslateY }],
+              },
+            ]}
+          >
+            <Text style={styles.titleText}>PNG Express</Text>
+            <View style={styles.accentDivider} />
+            <Text style={styles.taglineText}>Your Trusted Transport Service</Text>
+          </Animated.View>
+        </View>
 
-            {/* Lower Body Panels & Speed Accent */}
-            <View style={styles.chassis}>
-              <View style={styles.speedLine} />
-              <View style={styles.headlightAccent} />
-              <View style={styles.taillightAccent} />
-            </View>
-
-            {/* Wheel Arch Cutouts & High-Speed Highway Wheels */}
-            <View style={styles.wheelAssemblyRow}>
-              {/* Front Wheel */}
-              <View style={styles.wheelContainer}>
-                <View style={styles.wheelTire}>
-                  <View style={styles.wheelRim} />
-                </View>
-              </View>
-
-              <View style={styles.undercarriage} />
-
-              {/* Rear Dual Wheels */}
-              <View style={styles.wheelContainer}>
-                <View style={styles.wheelTire}>
-                  <View style={styles.wheelRim} />
-                </View>
-              </View>
-            </View>
-
-            {/* Ground Horizon Guideline */}
-            <View style={styles.horizonTrack} />
+        {/* Bottom Section: Ambient Loader & iOS Home Indicator */}
+        <Animated.View style={[styles.bottomContainer, { opacity: footerOpacity }]}>
+          <View style={styles.loaderRow}>
+            <ActivityIndicator size="small" color="#FFFFFF" />
+            <Text style={styles.loadingStatusText}>Starting Portal...</Text>
           </View>
-        </View>
 
-        {/* Brand Typography */}
-        <View style={styles.brandTextBlock}>
-          <Text style={styles.titleText}>PNG Express</Text>
-          <View style={styles.subAccentLine} />
-          <Text style={styles.taglineText}>Your Trusted Transport Service</Text>
-        </View>
-      </View>
+          <Text style={styles.skipHintText}>Tap anywhere to continue</Text>
 
-      {/* Bottom Safe Area & Action Controls (iPhone 16 / iOS 18 style) */}
-      <View style={styles.bottomContainer}>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={onContinue}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.primaryBtnText}>Get Started</Text>
-          <Text style={styles.arrowIcon}>➔</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.versionLabel}>
-          Public Transport Network • iOS 18 Edition
-        </Text>
-
-        {/* iPhone iOS Home Indicator Bar */}
-        <View style={styles.homeIndicator} />
-      </View>
+          {/* iOS 18 / iPhone 16 Home Indicator Bar */}
+          <View style={styles.homeIndicator} />
+        </Animated.View>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -106,8 +135,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#006FD8', // Vibrant cobalt / azure
-    justifyContent: 'space-between',
-    alignItems: 'center',
     width: '100%',
     ...(Platform.OS === 'web'
       ? {
@@ -118,11 +145,17 @@ const styles = StyleSheet.create({
         }
       : {}),
   },
+  touchableBackdrop: {
+    flex: 1,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
   topSpacer: {
-    height: 40,
+    height: 48,
   },
 
-  // Central Brand Identity
+  // Central Identity Container
   centralContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -130,164 +163,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 
-  // Icon Emblem Housing
+  // White Circular Emblem Housing the User's Bus Logo
   iconEmblem: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 8,
+    marginBottom: 26,
+    padding: 12,
+  },
+  busLogoImage: {
     width: 140,
     height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 6,
   },
 
-  // 2D Stylized Bus Silhouette in pure #FFFFFF
-  busSilhouette: {
-    width: 96,
-    height: 60,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  coachRoof: {
-    width: 88,
-    height: 6,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 5,
-    borderTopRightRadius: 8,
-    marginBottom: 1.5,
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  destBoardCutout: {
-    width: 24,
-    height: 2.5,
-    backgroundColor: '#006FD8',
-    borderRadius: 1,
-    alignSelf: 'flex-end',
-    marginRight: 6,
-  },
-
-  cabinRow: {
-    width: 90,
-    height: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 3,
-    marginBottom: 2,
-  },
-  windshield: {
-    width: 17,
-    height: 12,
-    backgroundColor: '#006FD8',
-    borderTopRightRadius: 6,
-    borderBottomRightRadius: 2,
-  },
-  passengerWindow: {
-    width: 13,
-    height: 12,
-    backgroundColor: '#006FD8',
-    borderRadius: 2,
-  },
-  passengerWindowSmall: {
-    width: 9,
-    height: 12,
-    backgroundColor: '#006FD8',
-    borderRadius: 2,
-  },
-
-  chassis: {
-    width: 92,
-    height: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 6,
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  speedLine: {
-    width: 60,
-    height: 2,
-    backgroundColor: '#006FD8',
-    borderRadius: 1,
-    marginLeft: 6,
-  },
-  headlightAccent: {
-    position: 'absolute',
-    right: 2,
-    top: 3,
-    width: 5,
-    height: 3,
-    backgroundColor: '#006FD8',
-    borderRadius: 1,
-  },
-  taillightAccent: {
-    position: 'absolute',
-    left: 2,
-    top: 3,
-    width: 3,
-    height: 5,
-    backgroundColor: '#006FD8',
-    borderRadius: 1,
-  },
-
-  wheelAssemblyRow: {
-    width: 86,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: -4,
-    zIndex: 2,
-  },
-  wheelContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wheelTire: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#006FD8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wheelRim: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#006FD8',
-  },
-  undercarriage: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 4,
-    marginTop: 2,
-  },
-
-  horizonTrack: {
-    width: 96,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    borderRadius: 1,
-    marginTop: 2,
-  },
-
-  // Typography
+  // Typography Block
   brandTextBlock: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   titleText: {
     fontSize: 34,
@@ -297,8 +197,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  subAccentLine: {
-    width: 48,
+  accentDivider: {
+    width: 44,
     height: 3,
     backgroundColor: '#FFFFFF',
     borderRadius: 2,
@@ -314,46 +214,31 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
 
-  // Bottom Section
+  // Bottom Safe Area Section
   bottomContainer: {
     width: '100%',
-    paddingHorizontal: 24,
-    paddingBottom: 20,
     alignItems: 'center',
+    paddingBottom: 20,
+    paddingHorizontal: 24,
   },
-  primaryBtn: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#FFFFFF', // High contrast pure white
-    borderRadius: 28,
+  loaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 5,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 8,
   },
-  primaryBtnText: {
-    color: '#006FD8', // Vibrant cobalt text
-    fontSize: 17,
-    fontWeight: '800',
+  loadingStatusText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontWeight: '600',
     letterSpacing: 0.4,
   },
-  arrowIcon: {
-    color: '#006FD8',
-    fontSize: 18,
-    fontWeight: '900',
-    marginLeft: 8,
-  },
-  versionLabel: {
-    color: 'rgba(255, 255, 255, 0.75)',
+  skipHintText: {
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 11,
     fontWeight: '500',
-    letterSpacing: 0.4,
-    marginBottom: 14,
+    letterSpacing: 0.3,
+    marginBottom: 16,
   },
   homeIndicator: {
     width: 134,
