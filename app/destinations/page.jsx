@@ -1,269 +1,162 @@
 import React from 'react';
+import DestinationsBanner from '@/components/DestinationsBanner';
+import SeatSearchSection from '@/components/SeatSearchSection';
+import DestinationsList from '@/components/DestinationsList';
+import HolidayDestinations from '@/components/HolidayDestinations';
+import CharterBookingEngine from '@/components/CharterBookingEngine';
 import Link from 'next/link';
-import ImageSlot from '@/components/ImageSlot';
 
 export const metadata = {
-  title: "Destinations | PNG Express Sri Lanka",
-  description: "Discover all destinations served by PNG Express across Sri Lanka including Jaffna, Point Pedro, Badulla, Passara, Kandy, and Kankesanthurai.",
+  title: "Destinations & Trip Planning Hub | PNG Express Sri Lanka",
+  description: "Official PNG Express travel hub: reserve bus seats online, explore top scheduled express routes across Sri Lanka, plan holidays, and charter entire buses for private group tours.",
 };
 
 export default function DestinationsPage() {
   return (
     <>
-      {/* Page Banner */}
-      <section style={{ background: 'linear-gradient(135deg, #0b1329, #1e293b)', color: '#ffffff', padding: '4.5rem 0 3.5rem', textAlign: 'center' }}>
-        <div className="container">
-          <span className="section-subtitle" style={{ color: '#38bdf8' }}>Islandwide Connectivity</span>
-          <h1 style={{ color: '#ffffff', fontSize: 'clamp(2rem, 3.8vw, 3.25rem)', marginBottom: '0.75rem' }}>Our Destinations</h1>
-          <p style={{ color: '#cbd5e1', fontSize: '1.05rem', maxWidth: '800px', margin: '0 auto' }}>
-            Connecting major cities, cultural landmarks, economic hubs, and regional capitals across Sri Lanka with luxury and super-luxury coaches.
-          </p>
+      {/* 1. Large Hero Banner with Quick Jump Navigator */}
+      <DestinationsBanner />
+
+      {/* 2. Seat Booking Section (/seat-booking integrated) */}
+      <section id="seat-booking" className="section" style={{ background: '#f8fafc', padding: '4.5rem 0', scrollMarginTop: '80px' }}>
+        <div className="container" style={{ maxWidth: '1140px' }}>
+          <div className="section-header" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <span className="section-subtitle" style={{ color: '#046bd2' }}>Official In-House Reservation System</span>
+            <h2 className="section-title" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', marginBottom: '0.75rem' }}>
+              Book Bus Seats Online
+            </h2>
+          </div>
+
+          <div style={{ marginBottom: '3rem' }}>
+            <SeatSearchSection />
+          </div>
+
+          {/* Guarantees & Features Row (Centered with Hover Animations) */}
+          <div className="dest-features-grid">
+            <div className="dest-feature-card">
+              <div className="dest-feature-icon-wrap dest-feature-icon-blue">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4 18v3h2v-3h12v3h2v-3a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-1V5a3 3 0 0 0-3-3H8a3 3 0 0 0-3 3v4H4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2zm3-13a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v4H7V5zm-3 7h16v4H4v-4z"/>
+                </svg>
+              </div>
+              <h3 className="dest-feature-title">Interactive Seat Selection</h3>
+              <p className="dest-feature-desc">
+                View real-time seating layouts with available window and aisle seats clearly marked. Pick your exact seat for maximum comfort.
+              </p>
+            </div>
+
+            <div className="dest-feature-card">
+              <div className="dest-feature-icon-wrap dest-feature-icon-green">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2L3 14h7v8l10-12h-7l1-8z" />
+                </svg>
+              </div>
+              <h3 className="dest-feature-title">Instant Digital E-Ticket</h3>
+              <p className="dest-feature-desc">
+                Your unique ticket reference number is generated instantly upon reservation. Print it out or simply show it from your smartphone upon boarding.
+              </p>
+            </div>
+
+            <div className="dest-feature-card">
+              <div className="dest-feature-icon-wrap dest-feature-icon-amber">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
+                </svg>
+              </div>
+              <h3 className="dest-feature-title">Guaranteed Boarding</h3>
+              <p className="dest-feature-desc">
+                Directly synchronized with our fleet dispatch terminal at Bastian Mawatha Pettah and Makumbura MMC for 100% seat confirmation.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Destinations Grid */}
-      <section className="section">
+      {/* 3. Most Popular Routes (Existing 8 Full-Fill Dual-Hover Destination Cards) */}
+      <section id="popular-routes" className="section" style={{ padding: '4.5rem 0', scrollMarginTop: '80px' }}>
         <div className="container">
-          <div className="destinations-grid">
-            {/* Jaffna */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Jaffna Peninsula Destination Slot"
-                  subtitle="Northern Cultural Landmark [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="landmark"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Jaffna</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Colombo / Moratuwa ⇌ Jaffna</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Daily super luxury overnight express linking Western Province and the northern capital with reclining seats, USB ports, and air conditioning.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Route 87</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departure</span><span className="meta-item-value">07:30 PM &amp; 08:30 PM</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-87" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
-              </div>
-            </article>
+          <div className="section-header" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <h2 className="section-title" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', marginBottom: '0.75rem' }}>
+              Most Popular Routes
+            </h2>
+          </div>
 
-            {/* Point Pedro */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Point Pedro Northern Tip Slot"
-                  subtitle="Palaly & Kopay Express Corridor [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="landmark"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Point Pedro</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Moratuwa ⇌ Point Pedro</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Direct routes via Palaly and via Kopay reaching the northernmost tip of the island smoothly and safely.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Route 87</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departures</span><span className="meta-item-value">08:00 PM &amp; 09:00 PM</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-87" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
-              </div>
-            </article>
+          <DestinationsList />
+        </div>
+      </section>
 
-            {/* Kankesanthurai */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Kankesanthurai Coastal Slot"
-                  subtitle="Keerimalai Springs Route 15 [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="landmark"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Kankesanthurai</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Panadura ⇌ Kankesanthurai</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Scheduled service via Kurunegala and Dambulla, carrying commuters to Kankesanthurai and Keerimalai springs.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Route 15</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departure</span><span className="meta-item-value">08:30 PM Daily</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-15" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
-              </div>
-            </article>
+      {/* 4. Plan Your Holiday (Sri Lanka Popular Destinations for Trips) */}
+      <section id="plan-holiday" className="section" style={{ background: '#f1f5f9', padding: '5.5rem 0', scrollMarginTop: '80px' }}>
+        <div className="container">
+          <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <span className="section-subtitle" style={{ color: '#046bd2' }}>Explore Paradise Island Sri Lanka</span>
+            <h2 className="section-title" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', marginBottom: '0.75rem' }}>
+              Plan Your Holiday &amp; Excursions
+            </h2>
+            <p className="section-description" style={{ maxWidth: '860px', margin: '0 auto', fontSize: '1.05rem', color: '#64748b' }}>
+              From misty highland tea trails and roaring waterfalls to sacred UNESCO kingdoms and sun-drenched coastal beaches, discover Sri Lanka’s top holiday destinations. Travel via daily express routes or reserve an entire bus for your private group holiday.
+            </p>
+          </div>
 
-            {/* Badulla & Ella */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Badulla & Ella Tourism Corridor Slot"
-                  subtitle="Ravana Ella & Highway Gateway [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="dest"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Badulla &amp; Ella</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Makumbura MMC ⇌ Badulla</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Southern Expressway route via Mattala, Wellawaya, and Ravana Ella tourism corridor to Badulla city center.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">EX 01 74/31-2</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departures</span><span className="meta-item-value">10:30 AM &amp; 05:30 PM</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-ex01" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
-              </div>
-            </article>
+          <HolidayDestinations />
+        </div>
+      </section>
 
-            {/* Passara */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Passara Hill Country Terminal Slot"
-                  subtitle="Founding Route 99 Station [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="dest"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Passara</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Colombo ⇌ Passara</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  The founding route of PNG Express connecting Colombo, Homagama, Bandarawela, Badulla, and Passara.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Route 99</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departure</span><span className="meta-item-value">12:45 AM Daily</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-99" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
-              </div>
-            </article>
+      {/* 5. Bus Charter Booking Section (/bus-booking integrated) */}
+      <section id="bus-booking" className="section" style={{ background: '#ffffff', padding: '5.5rem 0', scrollMarginTop: '80px', borderTop: '1px solid #e2e8f0' }}>
+        <div className="container" style={{ maxWidth: '1160px' }}>
+          <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <span className="section-subtitle" style={{ color: '#059669' }}>PNG Express Special Hires &amp; Charters</span>
+            <h2 className="section-title" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', marginBottom: '0.75rem' }}>
+              Book an Entire Bus for Your Trip
+            </h2>
+            <p className="section-description" style={{ maxWidth: '840px', margin: '0 auto', fontSize: '1.05rem', color: '#64748b' }}>
+              Exclusive private bus rentals for corporate getaways, family tours, school trips, pilgrimages, and weddings across Sri Lanka. Pick your route, dates, and coach category for an instant package quote.
+            </p>
+          </div>
 
-            {/* Kandy */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Kandy Cultural Capital Slot"
-                  subtitle="High Frequency Route 17 Transit [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="landmark"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-normal">Normal Service</span></div>
-                <div className="route-destination-tag">Kandy</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Panadura ⇌ Kandy</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  High frequency daily scheduled transit service connecting Western Province and the hill capital with 12+ daily round-trips.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Route 17</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departures</span><span className="meta-item-value">Every 30-45 mins</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-17" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/contact-us" className="btn btn-primary btn-sm">Contact Hotline</Link>
-                </div>
-              </div>
-            </article>
+          <CharterBookingEngine />
 
-            {/* Karainagar */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Karainagar Island Route Slot"
-                  subtitle="Casuarina Beach Causeway Link [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="dest"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Karainagar</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Moratuwa ⇌ Karainagar</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Direct connection from Moratuwa and Colombo to the island of Karainagar via Casuarina beach causeway.
-                </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Route 87</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Departure</span><span className="meta-item-value">07:30 PM Daily</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-87" className="btn btn-outline btn-sm">Timetable</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
-              </div>
-            </article>
+          {/* Fleet Charter Information & Guarantees */}
+          <div style={{ marginTop: '4rem', textAlign: 'center' }}>
+            <span className="section-subtitle" style={{ color: '#046bd2' }}>Why Choose PNG Express Charters</span>
+            <h3 style={{ fontSize: '1.85rem', color: '#0f172a', marginBottom: '2.5rem' }}>
+              The Safest &amp; Most Reliable Tour Transport in Sri Lanka
+            </h3>
 
-            {/* Trincomalee */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Trincomalee Eastern Harbor Slot"
-                  subtitle="Direct Luxury Transport Port [600x380]"
-                  aspectRatio="16/10"
-                  category="Destination Slot"
-                  dimensions="600 x 380 px"
-                  icon="dest"
-                />
-                <div className="route-badge-overlay"><span className="badge badge-super-luxury">Super Luxury</span></div>
-                <div className="route-destination-tag">Trincomalee</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Colombo ⇌ Trincomalee</h3>
-                <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Connecting the Eastern seaboard port of Trincomalee with Colombo via comfortable luxury coach service.
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.75rem', textAlign: 'left' }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.75rem' }}>
+                <div style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>🛡️</div>
+                <h4 style={{ color: '#0f172a', fontSize: '1.15rem', marginBottom: '0.5rem' }}>Certified Tour Captains</h4>
+                <p style={{ color: '#64748b', fontSize: '0.92rem', margin: 0, lineHeight: 1.6 }}>
+                  Experienced, defensive-driving certified captains trained specifically for expressway speed limits, hill-country hairpin bends, and night routes.
                 </p>
-                <div className="route-card-meta">
-                  <div className="meta-item"><span className="meta-item-label">Route</span><span className="meta-item-value">Special Express</span></div>
-                  <div className="meta-item"><span className="meta-item-label">Booking</span><span className="meta-item-value">In-House Online</span></div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/contact-us" className="btn btn-outline btn-sm">Inquire Schedule</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">Book Online</Link>
-                </div>
               </div>
-            </article>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.75rem' }}>
+                <div style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>📡</div>
+                <h4 style={{ color: '#0f172a', fontSize: '1.15rem', marginBottom: '0.5rem' }}>24/7 Live GPS Telematics</h4>
+                <p style={{ color: '#64748b', fontSize: '0.92rem', margin: 0, lineHeight: 1.6 }}>
+                  Every coach in our 142+ bus fleet is tracked live from our central operations center in Colombo with continuous speed and safety monitoring.
+                </p>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.75rem' }}>
+                <div style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>❄️</div>
+                <h4 style={{ color: '#0f172a', fontSize: '1.15rem', marginBottom: '0.5rem' }}>First-Class Passenger Comfort</h4>
+                <p style={{ color: '#64748b', fontSize: '0.92rem', margin: 0, lineHeight: 1.6 }}>
+                  High-capacity dual climate cooling, deep recline plush seating, individual USB ports, and massive underfloor luggage compartments.
+                </p>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.75rem' }}>
+                <div style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>⚡</div>
+                <h4 style={{ color: '#0f172a', fontSize: '1.15rem', marginBottom: '0.5rem' }}>Instant Quotations &amp; Fast Booking</h4>
+                <p style={{ color: '#64748b', fontSize: '0.92rem', margin: 0, lineHeight: 1.6 }}>
+                  Transparent distance-based fare calculations with zero hidden fees. Instant confirmation vouchers and flexible payment options.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>

@@ -34,11 +34,8 @@ export default function VisionMissionContent() {
       className={`vm-slide-container ${hasAnimated ? 'vm-slide-in' : 'vm-slide-start'}`}
     >
       <div className="vm-slide-item vm-slide-header">
-        <span className="section-subtitle">Welcome to PNG EXPRESS</span>
-        <h2 className="section-title">Our Vision and Mission</h2>
-        <p className="section-description" style={{ marginBottom: '2rem' }}>
-          Driving towards excellence with a profound commitment to comfort, passenger safety, and punctuality across Sri Lanka.
-        </p>
+        <span className="vm-welcome-subtitle">Welcome to PNG EXPRESS</span>
+        <h2 className="section-title" style={{ marginBottom: '1.75rem' }}>Our Vision and Mission</h2>
       </div>
 
       <div className="vm-slide-item vision-card">

@@ -1,57 +1,16 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import BookingWidget from '@/components/BookingWidget';
+import React, { useState } from 'react';
+import Link from 'next/link';
 
 export default function HeroSlider() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const closingTimerRef = useRef(null);
-
-  const handleOpen = () => {
-    if (closingTimerRef.current) clearTimeout(closingTimerRef.current);
-    setIsClosing(false);
-    setIsOpen(true);
-  };
-
-  const handleClose = () => {
-    if (isClosing) return;
-    setIsClosing(true);
-    closingTimerRef.current = setTimeout(() => {
-      setIsOpen(false);
-      setIsClosing(false);
-    }, 180);
-  };
-
-  const handleToggle = () => {
-    if (isOpen) {
-      handleClose();
-    } else {
-      handleOpen();
-    }
-  };
-
-  // When unhovering banner video: hide transparent tab and hide all things!
-  const handleSectionMouseLeave = (e) => {
-    if (e?.currentTarget && e?.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
-      return;
-    }
-    setIsHovered(false);
-    if (isOpen && !isClosing) {
-      handleClose();
-    }
-  };
-
-  const handleSectionMouseEnter = () => {
-    setIsHovered(true);
-  };
 
   return (
     <section
       className={`hero-video-section ${isHovered ? 'hero-hovered' : ''}`}
-      onMouseEnter={handleSectionMouseEnter}
-      onMouseLeave={handleSectionMouseLeave}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* 100vh Full Screen MP4 Video Banner */}
       <video
@@ -70,22 +29,15 @@ export default function HeroSlider() {
       {/* Subtle Cinematic Vignette Overlay */}
       <div className="hero-video-overlay" />
 
-      {/* Video Banner Interactive Stage */}
+      {/* Video Banner Interactive Stage with Two Redirection Buttons */}
       <div className={`container hero-video-booking-container ${isHovered ? 'stage-hovered' : ''}`}>
-        {/* Transparent Booking Tab (Launches UPSIDE from button with Genie Effect) */}
-        {(isOpen || isClosing) && (
-          <div className={`genie-window-wrapper ${isClosing ? 'genie-minimizing' : 'genie-expanding'}`}>
-            <BookingWidget onClose={handleClose} />
-          </div>
-        )}
-
-        {/* Liquid Glass Launch Button at the base */}
+        {/* Dual Liquid Glass Redirection Buttons at the base */}
         <div className={`hero-liquid-btn-wrapper ${isHovered ? 'btn-revealed' : ''}`}>
-          <button
-            type="button"
-            onClick={handleToggle}
-            className={`hero-liquid-glass-btn ${isOpen ? 'btn-dock-active' : ''}`}
-            aria-label={isOpen ? 'Minimize booking tab' : 'Open bus ticket reservation system'}
+          {/* Button 1: Redirect to Seat Booking Page */}
+          <Link
+            href="/seat-booking"
+            className="hero-liquid-glass-btn"
+            aria-label="Redirect to seat booking page"
           >
             <div className="btn-liquid-shimmer" />
             <div className="btn-bus-icon-wrap">
@@ -97,27 +49,47 @@ export default function HeroSlider() {
               </svg>
             </div>
             <div className="btn-text-content">
-              <span className="btn-primary-text">{isOpen ? 'MINIMIZE BOOKING TAB' : 'BOOK SEATS ONLINE'}</span>
-              <span className="btn-sub-text">{isOpen ? 'Click to minimize to video' : 'In-House Ticket Reservation'}</span>
+              <span className="btn-primary-text">BOOK SEATS ONLINE</span>
+              <span className="btn-sub-text">In-House Ticket Reservation</span>
             </div>
             <div className="btn-action-badge">
-              {isOpen ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="4 14 10 14 10 20" />
-                  <polyline points="20 10 14 10 14 4" />
-                  <line x1="14" y1="10" x2="21" y2="3" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 3 21 3 21 9" />
-                  <polyline points="9 21 3 21 3 15" />
-                  <line x1="21" y1="3" x2="14" y2="10" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </svg>
-              )}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="7" y1="17" x2="17" y2="7" />
+                <polyline points="7 7 17 7 17 17" />
+              </svg>
             </div>
-          </button>
+          </Link>
+
+          {/* Button 2: Redirect to Bus Booking Page (Entire Bus for Trip) */}
+          <Link
+            href="/bus-booking"
+            className="hero-liquid-glass-btn hero-charter-btn"
+            aria-label="Redirect to entire bus trip booking page"
+          >
+            <div className="btn-liquid-shimmer" />
+            <div className="btn-bus-icon-wrap btn-charter-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <path d="M6 18v2" />
+                <path d="M18 18v2" />
+                <circle cx="7" cy="18" r="1.5" />
+                <circle cx="17" cy="18" r="1.5" />
+                <path d="M2 11h20" />
+                <path d="M7 6v5" />
+                <path d="M12 6v5" />
+              </svg>
+            </div>
+            <div className="btn-text-content">
+              <span className="btn-primary-text">BOOK ENTIRE BUS FOR TRIP</span>
+              <span className="btn-sub-text">Private Tours & Special Hire</span>
+            </div>
+            <div className="btn-action-badge">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="7" y1="17" x2="17" y2="7" />
+                <polyline points="7 7 17 7 17 17" />
+              </svg>
+            </div>
+          </Link>
         </div>
       </div>
     </section>

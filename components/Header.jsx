@@ -28,7 +28,19 @@ export default function Header() {
     { label: 'Services', href: '/services' },
     { label: 'Bus Timetables', href: '/bus-timetables' },
     { label: 'Destinations', href: '/destinations' },
-    { label: 'Gallery Slots', href: '/gallery' },
+    { label: 'Gallery', href: '/gallery' },
+    { label: 'About us', href: '/about-us' },
+    { label: 'Contact us', href: '/contact-us' },
+  ];
+
+  const mobileNavLinks = [
+    { label: 'Home', href: '/' },
+    { label: 'Seat Booking', href: '/destinations#seat-booking' },
+    { label: 'Book Entire Bus for Trip', href: '/destinations#bus-booking' },
+    { label: 'Services', href: '/services' },
+    { label: 'Bus Timetables', href: '/bus-timetables' },
+    { label: 'Destinations', href: '/destinations' },
+    { label: 'Gallery', href: '/gallery' },
     { label: 'About us', href: '/about-us' },
     { label: 'Contact us', href: '/contact-us' },
   ];
@@ -58,7 +70,7 @@ export default function Header() {
 
           <div className="nav-actions">
             <Link
-              href="/#booking"
+              href="/seat-booking"
               className="btn btn-book-nav"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -101,7 +113,7 @@ export default function Header() {
             </button>
           </div>
           <nav className="mobile-nav-list">
-            {navLinks.map((link) => {
+            {mobileNavLinks.map((link) => {
               const isActive = pathname === link.href;
               return (
                 <Link
@@ -118,7 +130,7 @@ export default function Header() {
         </div>
         <div className="mobile-drawer-footer">
           <Link
-            href="/#booking"
+            href="/seat-booking"
             className="btn btn-primary"
             style={{ width: '100%', marginBottom: '1rem' }}
             onClick={() => setMobileOpen(false)}

@@ -5,6 +5,7 @@ import BookingWidget from '@/components/BookingWidget';
 import ImageSlot from '@/components/ImageSlot';
 import VisionCardDeck from '@/components/VisionCardDeck';
 import VisionMissionContent from '@/components/VisionMissionContent';
+import InteractiveDestinations from '@/components/InteractiveDestinations';
 
 export const metadata = {
   title: "Sri Lanka's Best Public Transport | PNG Express",
@@ -132,159 +133,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="destinations-grid">
-            {/* Route 1: Passara */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Colombo ⇌ Passara"
-                  subtitle="Route 99 Super Luxury Coach Slot"
-                  aspectRatio="16/10"
-                  category="Route Slot"
-                  dimensions="600 x 375 px"
-                  icon="bus"
-                />
-                <div className="route-badge-overlay">
-                  <span className="badge badge-super-luxury">Super Luxury</span>
-                </div>
-                <div className="route-destination-tag">Route 99</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Colombo ⇌ Passara</h3>
-                <div className="route-stops-path">
-                  <span>Colombo</span> ➔ <span>Homagama</span> ➔ <span>Bandarawela</span> ➔ <span>Badulla</span> ➔ <span>Passara</span>
-                </div>
-                <div className="route-card-meta">
-                  <div className="meta-item">
-                    <span className="meta-item-label">Departure</span>
-                    <span className="meta-item-value">12:45 AM / 12:30 AM</span>
-                  </div>
-                  <div className="meta-item">
-                    <span className="meta-item-label">Frequency</span>
-                    <span className="meta-item-value">Daily Scheduled</span>
-                  </div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-99" className="btn btn-outline btn-sm">More Details</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">RESERVE SEAT</Link>
-                </div>
-              </div>
-            </article>
-
-            {/* Route 2: Kankesanthurai */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Panadura ⇌ Kankesanthurai"
-                  subtitle="Route 15 Super Luxury Coach Slot"
-                  aspectRatio="16/10"
-                  category="Route Slot"
-                  dimensions="600 x 375 px"
-                  icon="bus"
-                />
-                <div className="route-badge-overlay">
-                  <span className="badge badge-super-luxury">Super Luxury</span>
-                </div>
-                <div className="route-destination-tag">Route 15</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Panadura ⇌ Kankesanthurai</h3>
-                <div className="route-stops-path">
-                  <span>Panadura</span> ➔ <span>Pettah</span> ➔ <span>Kurunegala</span> ➔ <span>Jaffna</span> ➔ <span>KKS</span>
-                </div>
-                <div className="route-card-meta">
-                  <div className="meta-item">
-                    <span className="meta-item-label">Departure</span>
-                    <span className="meta-item-value">08:30 PM (via Dambulla)</span>
-                  </div>
-                  <div className="meta-item">
-                    <span className="meta-item-label">Frequency</span>
-                    <span className="meta-item-value">Daily Scheduled</span>
-                  </div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-15" className="btn btn-outline btn-sm">More Details</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">RESERVE SEAT</Link>
-                </div>
-              </div>
-            </article>
-
-            {/* Route 3: Jaffna */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Moratuwa ⇌ Jaffna / Point Pedro"
-                  subtitle="Route 87 Super Luxury Express Slot"
-                  aspectRatio="16/10"
-                  category="Route Slot"
-                  dimensions="600 x 375 px"
-                  icon="bus"
-                />
-                <div className="route-badge-overlay">
-                  <span className="badge badge-super-luxury">Super Luxury</span>
-                </div>
-                <div className="route-destination-tag">Route 87</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Moratuwa ⇌ Jaffna / Point Pedro</h3>
-                <div className="route-stops-path">
-                  <span>Soysapura</span> ➔ <span>Wellawatta</span> ➔ <span>Pettah</span> ➔ <span>Jaffna</span> ➔ <span>Point Pedro</span>
-                </div>
-                <div className="route-card-meta">
-                  <div className="meta-item">
-                    <span className="meta-item-label">Departure</span>
-                    <span className="meta-item-value">07:30 PM &amp; 08:30 PM</span>
-                  </div>
-                  <div className="meta-item">
-                    <span className="meta-item-label">Services</span>
-                    <span className="meta-item-value">via Palaly &amp; Kopay</span>
-                  </div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-87" className="btn btn-outline btn-sm">More Details</Link>
-                  <Link href="/#booking" className="btn btn-primary btn-sm">RESERVE SEAT</Link>
-                </div>
-              </div>
-            </article>
-
-            {/* Route 4: Kandy */}
-            <article className="route-card">
-              <div className="route-card-image-wrap">
-                <ImageSlot
-                  title="Panadura ⇌ Kandy"
-                  subtitle="Route 17 Daily Service Slot"
-                  aspectRatio="16/10"
-                  category="Route Slot"
-                  dimensions="600 x 375 px"
-                  icon="bus"
-                />
-                <div className="route-badge-overlay">
-                  <span className="badge badge-normal">Normal Service</span>
-                </div>
-                <div className="route-destination-tag">Route 17</div>
-              </div>
-              <div className="route-card-body">
-                <h3 className="route-card-title">Panadura ⇌ Kandy</h3>
-                <div className="route-stops-path">
-                  <span>Panadura</span> ➔ <span>Moratuwa</span> ➔ <span>Colombo</span> ➔ <span>Kadawatha</span> ➔ <span>Kandy</span>
-                </div>
-                <div className="route-card-meta">
-                  <div className="meta-item">
-                    <span className="meta-item-label">Departures</span>
-                    <span className="meta-item-value">12+ Trips Daily</span>
-                  </div>
-                  <div className="meta-item">
-                    <span className="meta-item-label">Starts At</span>
-                    <span className="meta-item-value">03:30 AM Daily</span>
-                  </div>
-                </div>
-                <div className="route-card-actions">
-                  <Link href="/bus-timetables#route-17" className="btn btn-outline btn-sm">More Details</Link>
-                  <Link href="/contact-us" className="btn btn-primary btn-sm">Contact Hotline</Link>
-                </div>
-              </div>
-            </article>
-          </div>
+          <InteractiveDestinations />
         </div>
       </section>
 
@@ -440,7 +289,7 @@ export default function HomePage() {
               <h3 style={{ color: '#ffffff', fontSize: '1.8rem', margin: '0.5rem 0' }}>Book Smart, Travel Smart with PNG Express</h3>
               <p style={{ color: '#cbd5e1', marginBottom: 0 }}>Instant seat reservation, interactive coach floor plans, guaranteed bookings, and 24/7 passenger assistance.</p>
             </div>
-            <Link href="/#booking" className="btn btn-accent btn-lg">
+            <Link href="/destinations#seat-booking" className="btn btn-accent btn-lg">
               Reserve Your Seats Now ➔
             </Link>
           </div>
@@ -481,7 +330,7 @@ export default function HomePage() {
                 <p className="blog-excerpt">
                   In our buses traveling from Makumbura to Ella/Badulla and Colombo to Passara, all seats available for long distance routes are now open for instant online booking...
                 </p>
-                <Link href="/#booking" className="blog-link">Book Route Seats ➔</Link>
+                <Link href="/pay-for-booking?busId=b-99-1&from=Colombo&to=Passara" className="blog-link">Book Route Seats ➔</Link>
               </div>
             </article>
 
@@ -499,12 +348,12 @@ export default function HomePage() {
               </div>
               <div className="blog-content">
                 <h3 className="blog-title">
-                  <Link href="/#booking">Prepare yourselves for smart travel! Self-service ticketing launch</Link>
+                  <Link href="/destinations#seat-booking">Prepare yourselves for smart travel! Self-service ticketing launch</Link>
                 </h3>
                 <p className="blog-excerpt">
                   Dear Passengers from all corners of Sri Lanka! We proudly announce our new integrated passenger self-service ticketing system with visual seat layouts...
                 </p>
-                <Link href="/#booking" className="blog-link">Select Seats ➔</Link>
+                <Link href="/destinations#seat-booking" className="blog-link">Select Seats ➔</Link>
               </div>
             </article>
 
