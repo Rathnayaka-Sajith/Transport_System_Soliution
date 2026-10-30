@@ -6,13 +6,23 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { MOCK_DRIVER_TRIP, MOCK_CHECKLIST } from '../data/mockDatabase';
 
 export default function DriverDashboardScreen({ user }) {
+  const [activeTab, setActiveTab] = useState('cockpit'); // 'cockpit' | 'checklist' | 'hazards'
   const [tripStatus, setTripStatus] = useState('SCHEDULED'); // 'SCHEDULED' | 'IN_TRANSIT' | 'REST_HALT' | 'COMPLETED'
   const [checklist, setChecklist] = useState(MOCK_CHECKLIST);
-  const [sosActive, setSosActive] = useState(false);
+  const [sosModalVisible, setSosModalVisible] = useState(false);
+  const [sosReason, setSosReason] = useState('Engine Overheat / Coolant Warning');
+  const [sosDispatched, setSosDispatched] = useState(false);
+
+  // Road Hazards & Delays
+  const [reportedHazards, setReportedHazards] = useState([
+    { id: 1, type: 'Heavy Rain / Wet Road', delay: '+15 mins', location: 'Mirigama Expressway Section', time: '08:45 PM' },
+  ]);
 
   const toggleChecklistItem = (id) => {
     setChecklist((prev) =>
@@ -20,42 +30,66 @@ export default function DriverDashboardScreen({ user }) {
     );
   };
 
+  const handleCertifyAll = () => {
+    setChecklist((prev) => prev.map((item) => ({ ...item, done: true })));
+    Alert.alert('Pre-Trip Inspection', 'All 8 vehicle safety points certified.');
+  };
+
   const handleTripToggle = () => {
     if (tripStatus === 'SCHEDULED') {
-      // Check if all safety items are checked
       const pending = checklist.filter((c) => !c.done);
       if (pending.length > 0) {
         Alert.alert(
           'Checklist Incomplete',
-          `Please certify all safety checklist items before departure (${pending.length} pending).`
+          `Please certify all safety checklist items before departure (${pending.length} pending items).`
         );
         return;
       }
       setTripStatus('IN_TRANSIT');
-      Alert.alert('Journey Started', 'GPS tracking activated. Have a safe journey!');
+      Alert.alert('Journey Started', 'GPS tracking & passenger telematics live.');
     } else if (tripStatus === 'IN_TRANSIT') {
       setTripStatus('REST_HALT');
-      Alert.alert('Rest Halt', 'Bus paused at designated rest stop.');
+      Alert.alert('Rest Halt', 'Coach paused at highway rest stop.');
     } else if (tripStatus === 'REST_HALT') {
       setTripStatus('IN_TRANSIT');
       Alert.alert('Resuming Journey', 'Expressway travel resumed.');
+    } else if (tripStatus === 'COMPLETED') {
+      Alert.alert('Trip Finished', 'Trip concluded and logged to central dispatch.');
     }
   };
 
-  const handleSos = () => {
-    setSosActive(true);
+  const handleFinishTrip = () => {
+    setTripStatus('COMPLETED');
+    Alert.alert('Trip Completed', 'Welcome to Jaffna Central Terminal. Passenger disembarkation complete.');
+  };
+
+  const handleDispatchSos = () => {
+    setSosDispatched(true);
+    setSosModalVisible(false);
     Alert.alert(
-      '🚨 BREAKDOWN SOS DISPATCHED',
-      `Emergency roadside assistance alert broadcasted to PNG Fleet Dispatch and nearest mechanic (Kamal Jayawardena - Makumbura Depot).\n\nCurrent Coach: ${MOCK_DRIVER_TRIP.busPlate}\nRoute: ${MOCK_DRIVER_TRIP.routeName}`,
+      '🚨 EMERGENCY SOS DISPATCHED',
+      `Roadside rescue alert broadcasted to PNG Fleet Dispatch!\n\nIssue: ${sosReason}\nCoach: ${MOCK_DRIVER_TRIP.busPlate}\nNearest Lead Mechanic: Kamal Jayawardena (Makumbura Central Depot)\nStatus: Mobile Service Unit En Route (ETA 18m).`,
       [{ text: 'Acknowledged' }]
     );
+  };
+
+  const handleAddHazard = (type, delay) => {
+    const newH = {
+      id: Date.now(),
+      type,
+      delay,
+      location: 'Current GPS Location (Route 87)',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setReportedHazards([newH, ...reportedHazards]);
+    Alert.alert('Incident Logged', `${type} reported to central dispatch.`);
   };
 
   const certifiedCount = checklist.filter((c) => c.done).length;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Banner */}
+      {/* Route & Coach Header Card */}
       <View style={styles.banner}>
         <View style={styles.bannerBadge}>
           <Text style={styles.bannerBadgeText}>ROUTE 87 SUPER LUXURY</Text>
@@ -66,105 +100,306 @@ export default function DriverDashboardScreen({ user }) {
         </Text>
       </View>
 
-      {/* Trip Status Bar */}
-      <View style={styles.statusCard}>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusLabel}>CURRENT TRIP STATUS:</Text>
-          <View
-            style={[
-              styles.statusPill,
-              tripStatus === 'IN_TRANSIT' && { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' },
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusPillText,
-                tripStatus === 'IN_TRANSIT' && { color: '#059669' },
-              ]}
-            >
-              ● {tripStatus}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.timeGrid}>
-          <View style={styles.timeCol}>
-            <Text style={styles.timeLabel}>DEPARTURE</Text>
-            <Text style={styles.timeVal}>{MOCK_DRIVER_TRIP.departureTime}</Text>
-          </View>
-          <View style={styles.timeCol}>
-            <Text style={styles.timeLabel}>EST. ARRIVAL</Text>
-            <Text style={styles.timeVal}>{MOCK_DRIVER_TRIP.arrivalTime}</Text>
-          </View>
-          <View style={styles.timeCol}>
-            <Text style={styles.timeLabel}>DISTANCE</Text>
-            <Text style={styles.timeVal}>{MOCK_DRIVER_TRIP.totalDistance}</Text>
-          </View>
-        </View>
-
-        {/* Action Controls */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={[
-              styles.btnMainAction,
-              tripStatus === 'IN_TRANSIT' && { backgroundColor: '#f59e0b' },
-            ]}
-            onPress={handleTripToggle}
-          >
-            <Text style={styles.btnMainActionText}>
-              {tripStatus === 'SCHEDULED' && '🚀 Start Trip Journey'}
-              {tripStatus === 'IN_TRANSIT' && '☕ Pause at Rest Stop'}
-              {tripStatus === 'REST_HALT' && '▶️ Resume Journey'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.btnSos, sosActive && { backgroundColor: '#7f1d1d' }]}
-            onPress={handleSos}
-          >
-            <Text style={styles.btnSosText}>{sosActive ? '🚨 SOS ACTIVE' : '🚨 SOS'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Pre-Trip Vehicle Checklist */}
-      <View style={styles.checklistCard}>
-        <View style={styles.checklistHeader}>
-          <Text style={styles.checklistTitle}>📋 Pre-Trip Safety Inspection</Text>
-          <Text style={styles.checklistCounter}>
-            {certifiedCount} of {checklist.length} Certified
+      {/* Sub Tabs */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'cockpit' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('cockpit')}
+        >
+          <Text style={[styles.tabBtnText, activeTab === 'cockpit' && styles.tabBtnTextActive]}>
+            🧭 Cockpit & Route
           </Text>
-        </View>
+        </TouchableOpacity>
 
-        {checklist.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.checklistItem, item.done && styles.checklistItemDone]}
-            onPress={() => toggleChecklistItem(item.id)}
-          >
-            <Text style={[styles.itemText, item.done && styles.itemTextDone]}>
-              {item.title}
-            </Text>
-            <Text style={[styles.itemBadge, { color: item.done ? '#15803d' : '#dc2626' }]}>
-              {item.done ? '✓ CERTIFIED' : '✕ PENDING'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'checklist' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('checklist')}
+        >
+          <Text style={[styles.tabBtnText, activeTab === 'checklist' && styles.tabBtnTextActive]}>
+            📋 Pre-Trip ({certifiedCount}/8)
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'hazards' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('hazards')}
+        >
+          <Text style={[styles.tabBtnText, activeTab === 'hazards' && styles.tabBtnTextActive]}>
+            ⚠️ Road Delays
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Route Timeline */}
-      <View style={styles.timelineCard}>
-        <Text style={styles.checklistTitle}>📍 Route Stops & Waypoints</Text>
-        {MOCK_DRIVER_TRIP.stops.map((stop, i) => (
-          <View key={i} style={styles.timelineRow}>
-            <Text style={styles.timelineDot}>
-              {stop.status === 'DEPARTED' ? '🟢' : stop.status === 'CURRENT' ? '🟡' : '⚪'}
-            </Text>
-            <Text style={styles.timelineName}>{stop.name}</Text>
-            <Text style={styles.timelineTime}>{stop.time}</Text>
+      {/* TAB 1: COCKPIT & ROUTE */}
+      {activeTab === 'cockpit' && (
+        <>
+          {/* Telemetry Cockpit Gauges */}
+          <View style={styles.telemetryCard}>
+            <Text style={styles.cardHeaderSmall}>LIVE VEHICLE TELEMETRY & STATUS</Text>
+            <View style={styles.telemetryGrid}>
+              <View style={styles.telemetryBox}>
+                <Text style={styles.telemetryVal}>{tripStatus === 'IN_TRANSIT' ? '68' : '0'}</Text>
+                <Text style={styles.telemetryUnit}>km/h</Text>
+                <Text style={styles.telemetryLabel}>Speed</Text>
+              </View>
+
+              <View style={styles.telemetryBox}>
+                <Text style={[styles.telemetryVal, { color: '#10b981' }]}>78%</Text>
+                <Text style={styles.telemetryUnit}>Diesel</Text>
+                <Text style={styles.telemetryLabel}>Fuel Tank</Text>
+              </View>
+
+              <View style={styles.telemetryBox}>
+                <Text style={[styles.telemetryVal, { color: '#046bd2' }]}>38/40</Text>
+                <Text style={styles.telemetryUnit}>Seats</Text>
+                <Text style={styles.telemetryLabel}>Passengers</Text>
+              </View>
+
+              <View style={styles.telemetryBox}>
+                <Text style={[styles.telemetryVal, { color: '#8b5cf6' }]}>22m</Text>
+                <Text style={styles.telemetryUnit}>Countdown</Text>
+                <Text style={styles.telemetryLabel}>Next Halt</Text>
+              </View>
+            </View>
           </View>
-        ))}
-      </View>
+
+          {/* Trip Control Card */}
+          <View style={styles.statusCard}>
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>SHIFT OPERATION STATE:</Text>
+              <View
+                style={[
+                  styles.statusPill,
+                  tripStatus === 'IN_TRANSIT' && { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' },
+                  tripStatus === 'REST_HALT' && { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
+                  tripStatus === 'COMPLETED' && { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    tripStatus === 'IN_TRANSIT' && { color: '#059669' },
+                    tripStatus === 'REST_HALT' && { color: '#b45309' },
+                  ]}
+                >
+                  ● {tripStatus}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.timeGrid}>
+              <View style={styles.timeCol}>
+                <Text style={styles.timeLabel}>DEPARTURE</Text>
+                <Text style={styles.timeVal}>{MOCK_DRIVER_TRIP.departureTime}</Text>
+              </View>
+              <View style={styles.timeCol}>
+                <Text style={styles.timeLabel}>EST. ARRIVAL</Text>
+                <Text style={styles.timeVal}>{MOCK_DRIVER_TRIP.arrivalTime}</Text>
+              </View>
+              <View style={styles.timeCol}>
+                <Text style={styles.timeLabel}>DISTANCE</Text>
+                <Text style={styles.timeVal}>{MOCK_DRIVER_TRIP.totalDistance}</Text>
+              </View>
+            </View>
+
+            {/* Trip Action Buttons */}
+            {tripStatus !== 'COMPLETED' ? (
+              <View style={styles.tripActionsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.btnTripToggle,
+                    tripStatus === 'IN_TRANSIT' && { backgroundColor: '#f59e0b' },
+                    tripStatus === 'REST_HALT' && { backgroundColor: '#059669' },
+                  ]}
+                  onPress={handleTripToggle}
+                >
+                  <Text style={styles.btnTripText}>
+                    {tripStatus === 'SCHEDULED' && '▶ START EXPRESS TRIP'}
+                    {tripStatus === 'IN_TRANSIT' && '☕ PAUSE FOR REST STOP'}
+                    {tripStatus === 'REST_HALT' && '▶ RESUME JOURNEY'}
+                  </Text>
+                </TouchableOpacity>
+
+                {tripStatus === 'IN_TRANSIT' && (
+                  <TouchableOpacity
+                    style={styles.btnFinish}
+                    onPress={handleFinishTrip}
+                  >
+                    <Text style={styles.btnFinishText}>🏁 Arrived at Jaffna</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedBadgeText}>✓ Trip Completed & Logged to Depot</Text>
+              </View>
+            )}
+
+            {/* SOS Breakdown Alert Trigger */}
+            <TouchableOpacity
+              style={[styles.btnSos, sosDispatched && styles.btnSosActive]}
+              onPress={() => setSosModalVisible(true)}
+            >
+              <Text style={styles.btnSosText}>
+                {sosDispatched ? '🚨 SOS ACTIVE • MECHANIC DISPATCHED' : '🚨 REPORT ROADSIDE BREAKDOWN (SOS)'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Route Stops Timeline */}
+          <View style={styles.timelineCard}>
+            <Text style={styles.checklistTitle}>📍 Route Stops & Waypoints</Text>
+            {MOCK_DRIVER_TRIP.stops.map((stop, i) => (
+              <View key={i} style={styles.timelineRow}>
+                <Text style={styles.timelineDot}>
+                  {stop.status === 'DEPARTED' ? '🟢' : stop.status === 'CURRENT' ? '🟡' : '⚪'}
+                </Text>
+                <View style={styles.timelineInfo}>
+                  <Text style={styles.timelineName}>{stop.name}</Text>
+                  <Text style={styles.timelineStatus}>
+                    {stop.status === 'DEPARTED' ? 'Departed' : stop.status === 'CURRENT' ? 'Current Bus Stop' : 'Scheduled Halt'}
+                  </Text>
+                </View>
+                <Text style={styles.timelineTime}>{stop.time}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* TAB 2: PRE-TRIP CHECKLIST */}
+      {activeTab === 'checklist' && (
+        <View style={styles.checklistCard}>
+          <View style={styles.checklistHeader}>
+            <View>
+              <Text style={styles.checklistTitle}>Vehicle Safety Inspection</Text>
+              <Text style={styles.checklistSub}>
+                Mandatory Sri Lanka NTC Expressway Regulation
+              </Text>
+            </View>
+            <View style={styles.scoreBadge}>
+              <Text style={styles.scoreText}>{certifiedCount}/8</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.btnCertifyAll} onPress={handleCertifyAll}>
+            <Text style={styles.btnCertifyAllText}>✓ Certify All 8 Items as Safe</Text>
+          </TouchableOpacity>
+
+          {checklist.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.checklistItem, item.done && styles.checklistItemDone]}
+              onPress={() => toggleChecklistItem(item.id)}
+            >
+              <View style={[styles.checkbox, item.done && styles.checkboxDone]}>
+                <Text style={styles.checkboxTick}>{item.done ? '✓' : ''}</Text>
+              </View>
+              <Text style={[styles.checklistText, item.done && styles.checklistTextDone]}>
+                {item.title}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* TAB 3: HAZARDS & DELAYS */}
+      {activeTab === 'hazards' && (
+        <View style={styles.hazardsCard}>
+          <Text style={styles.checklistTitle}>⚠️ Road Hazards & Delay Reporter</Text>
+          <Text style={styles.checklistSub}>
+            Broadcast road conditions to central dispatch and incoming passengers.
+          </Text>
+
+          <View style={styles.quickHazardRow}>
+            <TouchableOpacity
+              style={styles.hazardQuickBtn}
+              onPress={() => handleAddHazard('Heavy Monsoon Rain', '+20 mins')}
+            >
+              <Text style={styles.hazardQuickIcon}>🌧️</Text>
+              <Text style={styles.hazardQuickTitle}>Heavy Rain</Text>
+              <Text style={styles.hazardQuickDelay}>+20m delay</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.hazardQuickBtn}
+              onPress={() => handleAddHazard('Expressway Toll Congestion', '+15 mins')}
+            >
+              <Text style={styles.hazardQuickIcon}>🚧</Text>
+              <Text style={styles.hazardQuickTitle}>Toll Queue</Text>
+              <Text style={styles.hazardQuickDelay}>+15m delay</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.hazardQuickBtn}
+              onPress={() => handleAddHazard('Police Safety Checkpoint', '+10 mins')}
+            >
+              <Text style={styles.hazardQuickIcon}>👮</Text>
+              <Text style={styles.hazardQuickTitle}>Police Check</Text>
+              <Text style={styles.hazardQuickDelay}>+10m delay</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.cardHeaderSmall, { marginTop: 18 }]}>ACTIVE LOGGED INCIDENTS:</Text>
+
+          {reportedHazards.map((h) => (
+            <View key={h.id} style={styles.loggedHazardItem}>
+              <View style={styles.loggedHazardLeft}>
+                <Text style={styles.loggedHazardType}>{h.type}</Text>
+                <Text style={styles.loggedHazardLocation}>{h.location} • {h.time}</Text>
+              </View>
+              <View style={styles.loggedHazardDelayBadge}>
+                <Text style={styles.loggedHazardDelayText}>{h.delay}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* SOS Modal */}
+      <Modal
+        visible={sosModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSosModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.sosModalBox}>
+            <Text style={styles.sosModalEmoji}>🚨</Text>
+            <Text style={styles.sosModalTitle}>Emergency Roadside Rescue</Text>
+            <Text style={styles.sosModalSub}>
+              Coach NB-4592 • Route 87 Expressway
+            </Text>
+
+            <Text style={styles.sosFieldLabel}>SELECT BREAKDOWN REASON:</Text>
+            {[
+              'Engine Overheat / Coolant Warning',
+              'Tire Blowout / Pressure Loss',
+              'Brake Pressure / Hydraulic Failure',
+              'Air Suspension / Steering Fault',
+              'Electrical / Alternator Breakdown',
+            ].map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={[styles.sosReasonBtn, sosReason === reason && styles.sosReasonBtnSelected]}
+                onPress={() => setSosReason(reason)}
+              >
+                <Text style={[styles.sosReasonText, sosReason === reason && styles.sosReasonTextSelected]}>
+                  {reason}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity style={styles.btnConfirmSos} onPress={handleDispatchSos}>
+              <Text style={styles.btnConfirmSosText}>⚡ BROADCAST DISTRESS TO MECHANICS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.btnCancelModal} onPress={() => setSosModalVisible(false)}>
+              <Text style={styles.btnCancelModalText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -172,20 +407,19 @@ export default function DriverDashboardScreen({ user }) {
 const styles = StyleSheet.create({
   container: {
     padding: 16,
-    backgroundColor: '#f8fafc',
-    flexGrow: 1,
+    paddingBottom: 40,
   },
   banner: {
-    backgroundColor: '#046bd2',
-    padding: 18,
+    backgroundColor: '#0b1329',
     borderRadius: 14,
+    padding: 18,
     marginBottom: 12,
   },
   bannerBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
+    backgroundColor: '#046bd2',
     paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 6,
     marginBottom: 6,
   },
@@ -201,23 +435,101 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   bannerSub: {
-    color: '#e0f2fe',
+    color: '#94a3b8',
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 4,
   },
-  statusCard: {
+
+  // Tabs
+  tabBar: {
+    flexDirection: 'row',
     backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabBtnActive: {
+    backgroundColor: '#046bd2',
+  },
+  tabBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabBtnTextActive: {
+    color: '#ffffff',
+  },
+
+  // Cockpit Telemetry
+  telemetryCard: {
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     marginBottom: 12,
+  },
+  cardHeaderSmall: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  telemetryGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  telemetryBox: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#edf2f7',
+  },
+  telemetryVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  telemetryUnit: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: -2,
+  },
+  telemetryLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+
+  // Status Card
+  statusCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
   },
   statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   statusLabel: {
     fontSize: 10,
@@ -229,8 +541,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     borderWidth: 1,
     borderColor: '#bfdbfe',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     borderRadius: 20,
   },
   statusPillText: {
@@ -240,137 +552,364 @@ const styles = StyleSheet.create({
   },
   timeGrid: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     backgroundColor: '#f8fafc',
     borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
+    padding: 12,
+    marginBottom: 14,
   },
   timeCol: {
-    flex: 1,
     alignItems: 'center',
   },
   timeLabel: {
     fontSize: 9,
+    color: '#94a3b8',
     fontWeight: '700',
-    color: '#64748b',
   },
   timeVal: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
     marginTop: 2,
   },
-  actionRow: {
-    flexDirection: 'row',
+  tripActionsRow: {
     gap: 8,
   },
-  btnMainAction: {
-    flex: 1,
-    height: 46,
+  btnTripToggle: {
     backgroundColor: '#046bd2',
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  btnMainActionText: {
+  btnTripText: {
     color: '#ffffff',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  btnSos: {
-    paddingHorizontal: 14,
-    height: 46,
-    backgroundColor: '#dc2626',
-    borderRadius: 8,
+  btnFinish: {
+    backgroundColor: '#10b981',
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  btnSosText: {
+  btnFinishText: {
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '800',
   },
-  checklistCard: {
+  completedBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    marginBottom: 8,
+  },
+  completedBadgeText: {
+    color: '#059669',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  btnSos: {
+    marginTop: 10,
+    backgroundColor: '#ef4444',
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  btnSosActive: {
+    backgroundColor: '#b91c1c',
+  },
+  btnSosText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+
+  // Timeline
+  timelineCard: {
     backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  timelineDot: {
+    fontSize: 14,
+    width: 28,
+  },
+  timelineInfo: {
+    flex: 1,
+  },
+  timelineName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  timelineStatus: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  timelineTime: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#046bd2',
+  },
+
+  // Checklist
+  checklistCard: {
+    backgroundColor: '#ffffff',
     borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   checklistHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   checklistTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0f172a',
   },
-  checklistCounter: {
+  checklistSub: {
     fontSize: 11,
-    fontWeight: '800',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  scoreBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  scoreText: {
     color: '#059669',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  btnCertifyAll: {
+    backgroundColor: '#046bd2',
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  btnCertifyAllText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   checklistItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    marginBottom: 6,
-  },
-  checklistItemDone: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#bbf7d0',
-  },
-  itemText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0f172a',
-    flex: 1,
-  },
-  itemTextDone: {
-    color: '#15803d',
-  },
-  itemBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  timelineCard: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 20,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
+    gap: 12,
   },
-  timelineDot: {
-    fontSize: 10,
-    marginRight: 8,
+  checklistItemDone: {
+    opacity: 0.85,
   },
-  timelineName: {
-    flex: 1,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxDone: {
+    backgroundColor: '#046bd2',
+    borderColor: '#046bd2',
+  },
+  checkboxTick: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  checklistText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#0f172a',
+    flex: 1,
   },
-  timelineTime: {
-    fontSize: 12,
+  checklistTextDone: {
+    color: '#475569',
+  },
+
+  // Hazards
+  hazardsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickHazardRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  hazardQuickBtn: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+  },
+  hazardQuickIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  hazardQuickTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  hazardQuickDelay: {
+    fontSize: 10,
+    color: '#ef4444',
     fontWeight: '700',
+    marginTop: 2,
+  },
+  loggedHazardItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  loggedHazardLeft: {
+    flex: 1,
+  },
+  loggedHazardType: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  loggedHazardLocation: {
+    fontSize: 10,
+    color: '#b45309',
+    marginTop: 2,
+  },
+  loggedHazardDelayBadge: {
+    backgroundColor: '#fef3c7',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  loggedHazardDelayText: {
+    color: '#b45309',
+    fontWeight: '800',
+    fontSize: 11,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  sosModalBox: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  sosModalEmoji: {
+    fontSize: 40,
+    marginBottom: 6,
+  },
+  sosModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#ef4444',
+    textAlign: 'center',
+  },
+  sosModalSub: {
+    fontSize: 11,
     color: '#64748b',
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  sosFieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  sosReasonBtn: {
+    width: '100%',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    marginBottom: 6,
+  },
+  sosReasonBtnSelected: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+  },
+  sosReasonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  sosReasonTextSelected: {
+    color: '#b91c1c',
+    fontWeight: '800',
+  },
+  btnConfirmSos: {
+    width: '100%',
+    backgroundColor: '#ef4444',
+    paddingVertical: 13,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  btnConfirmSosText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  btnCancelModal: {
+    marginTop: 10,
+    paddingVertical: 8,
+  },
+  btnCancelModalText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

@@ -283,3 +283,101 @@ export const MOCK_JOB_CARDS = [
     ],
   },
 ];
+
+// Active Emergency Breakdown Calls for Fleet Mechanics
+export const MOCK_EMERGENCY_RESCUES = [
+  {
+    rescueId: 'SOS-2026-901',
+    busPlate: 'NA-8819',
+    route: 'Route 04 (Colombo ➔ Mannar)',
+    location: 'A3 Highway near Puttalam Wind Farm (Km 128)',
+    issueDescription: 'Coolant hose burst, radiator overheating & high temperature warning',
+    driverName: 'Ranjith Perera (+94 77 881 2930)',
+    passengersOnboard: 39,
+    status: 'DISPATCHED', // 'OPEN' | 'DISPATCHED' | 'RESOLVED'
+    priority: 'CRITICAL',
+    timeReported: '12 mins ago',
+    assignedVan: 'Mobile Rescue Van #02 (Makumbura)',
+    etaMinutes: 18,
+  },
+  {
+    rescueId: 'SOS-2026-902',
+    busPlate: 'ND-2041',
+    route: 'Route 48 (Colombo ➔ Polonnaruwa)',
+    location: 'Habarana Junction Overpass',
+    issueDescription: 'Rear right outer dual tire puncture, air suspension pressure warning',
+    driverName: 'Saman Jayasuriya (+94 71 332 9911)',
+    passengersOnboard: 41,
+    status: 'OPEN',
+    priority: 'HIGH',
+    timeReported: '4 mins ago',
+    assignedVan: null,
+    etaMinutes: null,
+  },
+];
+
+// Spare Parts & Consumables Inventory for Mechanic Workshop
+export const MOCK_PARTS_INVENTORY = [
+  { id: 'part-01', code: 'BP-KL-40', name: 'King Long Heavy Ceramic Front Brake Pads', inStock: 14, minLevel: 6, unit: 'Sets', status: 'OK' },
+  { id: 'part-02', code: 'AC-BELT-88', name: 'Dual Compressor Serpentine Drive Belt 8PK-1850', inStock: 3, minLevel: 5, unit: 'Pieces', status: 'LOW' },
+  { id: 'part-03', code: 'OIL-15W40', name: 'Shell Rimula R4 X 15W-40 Heavy Diesel Oil', inStock: 480, minLevel: 200, unit: 'Litres', status: 'OK' },
+  { id: 'part-04', code: 'AIR-FIL-YT', name: 'Yutong Grand Cruiser Cylindrical Air Filter', inStock: 2, minLevel: 4, unit: 'Pieces', status: 'LOW' },
+  { id: 'part-05', code: 'TUBE-295-80', name: 'Tubeless Radial Highway Tire 295/80 R22.5', inStock: 8, minLevel: 4, unit: 'Tires', status: 'OK' },
+  { id: 'part-06', code: 'RAD-CAP-13', name: 'Pressurized Heavy Radiator Cap 1.3 Bar', inStock: 0, minLevel: 3, unit: 'Pieces', status: 'OUT_OF_STOCK' },
+];
+
+// Bus Fleet Diagnostic Health Lookup Records
+export const MOCK_FLEET_RECORDS = {
+  'NB-4592': {
+    plate: 'NB-4592',
+    model: 'King Long XMQ6127 Super Luxury',
+    year: 2023,
+    engineHours: 4210,
+    odometerKm: '184,290 km',
+    lastServiceDate: '2026-10-18',
+    nextServiceDueKm: '195,000 km',
+    frontTireTread: '8.4 mm (Good)',
+    rearTireTread: '7.9 mm (Good)',
+    brakeLiningPct: '82%',
+    batteryHealth: '12.8V (Healthy)',
+    activePermitNo: 'NTC-EXP-WP-2026-4412',
+    safetyRating: 'Grade A+ (Expressway Approved)',
+  },
+  'ND-6612': {
+    plate: 'ND-6612',
+    model: 'Yutong ZK6122HD Luxury Cruiser',
+    year: 2022,
+    engineHours: 6150,
+    odometerKm: '262,400 km',
+    lastServiceDate: '2026-10-02',
+    nextServiceDueKm: '270,000 km',
+    frontTireTread: '5.1 mm (Fair)',
+    rearTireTread: '5.8 mm (Fair)',
+    brakeLiningPct: '54%',
+    batteryHealth: '12.4V (Moderate)',
+    activePermitNo: 'NTC-EXP-WP-2026-1904',
+    safetyRating: 'Grade B+ (Requires Service)',
+  },
+  'NA-8819': {
+    plate: 'NA-8819',
+    model: 'Higer KLQ6129 Luxury Express',
+    year: 2021,
+    engineHours: 7800,
+    odometerKm: '318,120 km',
+    lastServiceDate: '2026-09-14',
+    nextServiceDueKm: '325,000 km',
+    frontTireTread: '6.2 mm (Fair)',
+    rearTireTread: '6.0 mm (Fair)',
+    brakeLiningPct: '68%',
+    batteryHealth: '12.6V (Healthy)',
+    activePermitNo: 'NTC-EXP-WP-2026-0881',
+    safetyRating: 'Grade A (Operational)',
+  },
+};
+
+// Baggage Cargo Records for Conductor
+export const MOCK_LUGGAGE_REGISTRY = [
+  { tagNo: 'LUG-8801', seatNo: 1, passengerName: 'Kasun Bandara', pieces: 2, compartment: 'Side Bay A (Left)', weightKg: '28 kg' },
+  { tagNo: 'LUG-8802', seatNo: 12, passengerName: 'Mohamed Rizwan', pieces: 3, compartment: 'Side Bay B (Right)', weightKg: '42 kg' },
+  { tagNo: 'LUG-8803', seatNo: 5, passengerName: 'Sithara Fernando', pieces: 1, compartment: 'Side Bay A (Left)', weightKg: '14 kg' },
+];
