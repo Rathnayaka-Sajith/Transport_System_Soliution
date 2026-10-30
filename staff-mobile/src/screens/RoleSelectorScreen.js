@@ -56,11 +56,6 @@ export default function RoleSelectorScreen({ user, onSelectRole, onCancel }) {
         Who are you logging in as right now?
       </Text>
 
-      {/* Subtitle / Hint */}
-      <Text style={styles.subtitleHint}>
-        You are registered for {userRoles.length} duty categories. Select your active role for this work shift:
-      </Text>
-
       {/* Linear Role Selection Cards */}
       <View style={styles.linearRoleList}>
         {/* As a Driver (Image 4: Coach Cockpit) */}
@@ -82,9 +77,6 @@ export default function RoleSelectorScreen({ user, onSelectRole, onCancel }) {
             <View style={styles.cardContent}>
               <Text style={[styles.actionTag, { color: '#006FD8' }]}>START SHIFT</Text>
               <Text style={styles.cardMainTitle}>As a Driver</Text>
-              <Text style={styles.cardDescription}>
-                Assigned coach route navigation, pre-trip safety checklist & telematics.
-              </Text>
             </View>
 
             <View style={[styles.arrowBox, { backgroundColor: '#eff6ff' }]}>
@@ -112,9 +104,6 @@ export default function RoleSelectorScreen({ user, onSelectRole, onCancel }) {
             <View style={styles.cardContent}>
               <Text style={[styles.actionTag, { color: '#10b981' }]}>START SHIFT</Text>
               <Text style={styles.cardMainTitle}>As a Conductor</Text>
-              <Text style={styles.cardDescription}>
-                Live QR digital ticket scanning, 40-seat passenger manifest & cash tickets.
-              </Text>
             </View>
 
             <View style={[styles.arrowBox, { backgroundColor: '#ecfdf5' }]}>
@@ -137,9 +126,6 @@ export default function RoleSelectorScreen({ user, onSelectRole, onCancel }) {
             <View style={styles.cardContent}>
               <Text style={[styles.actionTag, { color: '#f59e0b' }]}>START SHIFT</Text>
               <Text style={styles.cardMainTitle}>As a Mechanic</Text>
-              <Text style={styles.cardDescription}>
-                Workshop maintenance job cards, roadside emergency rescue & roadworthy sign-off.
-              </Text>
             </View>
 
             <View style={[styles.arrowBox, { backgroundColor: '#fffbeb' }]}>
@@ -186,21 +172,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   circleWrapper: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#FFFFFF',
     borderWidth: 3.5,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOpacity: 0.18,
-    shadowOffset: { width: 0, height: 6 },
+    borderColor: '#006FD8',
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.28,
+    shadowOffset: { width: 0, height: 4 },
     shadowRadius: 10,
     elevation: 5,
     overflow: 'hidden',
   },
   circleOverlap: {
-    marginLeft: -20, // Creates the crossing circles effect
+    marginLeft: -18, // Creates the crossing circles effect
   },
   circleImage: {
     width: '100%',
@@ -238,15 +224,7 @@ const styles = StyleSheet.create({
     color: '#006FD8',
     textAlign: 'center',
     marginTop: 6,
-    marginBottom: 6,
-  },
-  subtitleHint: {
-    fontSize: 13,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 24,
-    maxWidth: 320,
-    lineHeight: 18,
+    marginBottom: 22,
   },
 
   // Linear Role Cards
@@ -312,13 +290,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
-    marginTop: 1,
-  },
-  cardDescription: {
-    fontSize: 11,
-    color: '#64748b',
     marginTop: 2,
-    lineHeight: 15,
   },
 
   // Right Arrow Icon
