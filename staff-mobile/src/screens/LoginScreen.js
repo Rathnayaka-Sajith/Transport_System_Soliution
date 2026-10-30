@@ -10,12 +10,12 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { INITIAL_STAFF_USERS } from '../data/mockDatabase';
 
 export default function LoginScreen({
   onLoginSuccess,
   onNavigateRegister,
-  onBackToSplash,
   staffList,
 }) {
   const [identifier, setIdentifier] = useState(''); // email, username, or employee ID
@@ -63,12 +63,6 @@ export default function LoginScreen({
     >
       {/* Top Brand Identity Header */}
       <View style={styles.brandHeader}>
-        {onBackToSplash ? (
-          <TouchableOpacity style={styles.backPill} onPress={onBackToSplash}>
-            <Text style={styles.backPillText}>← Splash</Text>
-          </TouchableOpacity>
-        ) : null}
-
         <View style={styles.busIconContainer}>
           <Image
             source={require('../../assets/bus-logo-blue.png')}
@@ -115,7 +109,7 @@ export default function LoginScreen({
         {/* Password with Eye Toggle */}
         <View style={styles.inputWrapper}>
           <TextInput
-            style={[styles.inputField, { paddingRight: 46 }]}
+            style={[styles.inputField, { paddingRight: 48 }]}
             placeholder="Password"
             placeholderTextColor="#94a3b8"
             secureTextEntry={!showPassword}
@@ -130,7 +124,11 @@ export default function LoginScreen({
             onPress={() => setShowPassword(!showPassword)}
             activeOpacity={0.7}
           >
-            <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
+            <Feather
+              name={showPassword ? 'eye' : 'eye-off'}
+              size={20}
+              color={showPassword ? '#006FD8' : '#94a3b8'}
+            />
           </TouchableOpacity>
         </View>
 
@@ -170,7 +168,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 28,
-    paddingTop: 36,
+    paddingTop: 40,
     paddingBottom: 32,
     justifyContent: 'space-between',
     ...(Platform.OS === 'web'
@@ -186,33 +184,18 @@ const styles = StyleSheet.create({
   // Brand Header
   brandHeader: {
     alignItems: 'center',
-    marginBottom: 28,
-    position: 'relative',
-  },
-  backPill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-  },
-  backPillText: {
-    fontSize: 11,
-    color: '#006FD8',
-    fontWeight: '700',
+    marginBottom: 24,
   },
   busIconContainer: {
-    width: 120,
-    height: 84,
+    width: '100%',
+    height: 95,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   busImage: {
-    width: 110,
-    height: 80,
+    width: 140,
+    height: 90,
   },
   brandTitle: {
     fontSize: 28,
@@ -283,11 +266,8 @@ const styles = StyleSheet.create({
   eyeBtn: {
     position: 'absolute',
     right: 14,
-    top: 15,
+    top: 16,
     padding: 2,
-  },
-  eyeIcon: {
-    fontSize: 18,
   },
 
   // Forgot Password

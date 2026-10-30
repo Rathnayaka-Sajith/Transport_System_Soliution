@@ -6,374 +6,454 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  Image,
   Alert,
+  Platform,
 } from 'react-native';
-import { ROLE_DEFINITIONS } from '../data/mockDatabase';
+import { Feather } from '@expo/vector-icons';
 
 export default function RegisterScreen({ onRegisterSuccess, onBackToLogin }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
-  const [nic, setNic] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // Multi-Role Category Selection (can check 1, 2, or 3)
-  const [selectedRoles, setSelectedRoles] = useState(['driver']);
+  // Selected Categories (can select multiple: driver, conductor, mechanic)
+  const [selectedCategories, setSelectedCategories] = useState(['driver']);
 
-  // Role Specific Fields
-  const [licenseNo, setLicenseNo] = useState('');
-  const [conductorBadge, setConductorBadge] = useState('');
-  const [mechanicSpecialty, setMechanicSpecialty] = useState('Air Brakes & Suspension');
-
-  const toggleRole = (roleId) => {
-    if (selectedRoles.includes(roleId)) {
-      if (selectedRoles.length === 1) {
-        Alert.alert('Selection Required', 'You must select at least one staff duty category.');
+  const toggleCategory = (catId) => {
+    if (selectedCategories.includes(catId)) {
+      if (selectedCategories.length === 1) {
+        Alert.alert('Category Required', 'You must select at least one staff category.');
         return;
       }
-      setSelectedRoles(selectedRoles.filter((r) => r !== roleId));
+      setSelectedCategories(selectedCategories.filter((c) => c !== catId));
     } else {
-      setSelectedRoles([...selectedRoles, roleId]);
+      setSelectedCategories([...selectedCategories, catId]);
     }
   };
 
   const handleRegister = () => {
-    if (!name.trim() || !phone.trim() || !email.trim() || !password) {
-      Alert.alert('Required Fields', 'Please fill in your name, mobile, email, and password.');
+    setErrorMsg('');
+
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !employeeId.trim() || !password) {
+      setErrorMsg('Please fill in all fields (Name, Email, Employee ID, Password).');
       return;
     }
 
-    if (selectedRoles.length === 0) {
-      Alert.alert('Category Required', 'Please select at least one job role category.');
+    if (selectedCategories.length === 0) {
+      setErrorMsg('Please select at least one staff category.');
       return;
     }
 
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
     const newStaffUser = {
       id: 'emp-' + Date.now(),
-      employeeId: 'PNG-EMP-' + Math.floor(106 + Math.random() * 50),
-      name: name.trim(),
-      email: email.trim(),
+      employeeId: employeeId.trim().toUpperCase(),
+      name: fullName,
+      email: email.trim().toLowerCase(),
       password: password,
-      phone: phone.trim(),
-      nic: nic.trim() || '200019283710',
-      avatar: selectedRoles.includes('driver') ? '👨‍✈️' : selectedRoles.includes('conductor') ? '🎫' : '🔧',
-      roles: [...selectedRoles],
-      driverDetails: selectedRoles.includes('driver') ? { licenseNo: licenseNo || 'B-DL-PENDING', experienceYears: 5 } : null,
-      conductorDetails: selectedRoles.includes('conductor') ? { badgeNo: conductorBadge || 'COND-WP-NEW' } : null,
-      mechanicDetails: selectedRoles.includes('mechanic') ? { specialization: mechanicSpecialty } : null,
+      phone: '+94 77 000 0000',
+      nic: '2000' + Math.floor(10000000 + Math.random() * 90000000),
+      avatar: selectedCategories.includes('driver')
+        ? '👨‍✈️'
+        : selectedCategories.includes('conductor')
+        ? '🎫'
+        : '🔧',
+      roles: [...selectedCategories],
+      driverDetails: selectedCategories.includes('driver')
+        ? { licenseNo: 'B-DL-' + employeeId.trim().toUpperCase(), experienceYears: 5 }
+        : null,
+      conductorDetails: selectedCategories.includes('conductor')
+        ? { badgeNo: 'COND-' + employeeId.trim().toUpperCase(), depot: 'Colombo Central Fleet' }
+        : null,
+      mechanicDetails: selectedCategories.includes('mechanic')
+        ? { specialization: 'Heavy Coach Mechanical & Electrical', workshop: 'Central Workshop' }
+        : null,
     };
 
     Alert.alert(
-      'Registration Complete',
-      `Welcome ${newStaffUser.name}! Your account has been registered with ${selectedRoles.length} duty categories.`,
-      [{ text: 'Continue', onPress: () => onRegisterSuccess(newStaffUser) }]
+      'Account Created',
+      `Welcome ${newStaffUser.name}! Your account has been registered with ${selectedCategories.length} duty categories.`,
+      [{ text: 'Continue to Portal', onPress: () => onRegisterSuccess(newStaffUser) }]
     );
   };
 
+  const categories = [
+    { id: 'driver', title: 'Driver', icon: '🚌' },
+    { id: 'conductor', title: 'Conductor', icon: '🎫' },
+    { id: 'mechanic', title: 'Mechanic', icon: '🔧' },
+  ];
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.topBar}>
-        <Text style={styles.title}>Staff Registration</Text>
-        <TouchableOpacity onPress={onBackToLogin}>
-          <Text style={styles.backBtnText}>Back to Sign In</Text>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Brand Header */}
+      <View style={styles.brandHeader}>
+        <View style={styles.busIconContainer}>
+          <Image
+            source={require('../../assets/bus-logo-blue.png')}
+            style={styles.busImage}
+            resizeMode="contain"
+          />
+        </View>
+
+        <Text style={styles.brandTitle}>PNG Express</Text>
+        <Text style={styles.brandTagline}>Your Trusted Transport Service</Text>
+      </View>
+
+      {/* Title */}
+      <View style={styles.titleSection}>
+        <Text style={styles.titleMain}>Create Account</Text>
+        <Text style={styles.titleSub}>Sign up with staff credentials</Text>
+      </View>
+
+      {/* Error Banner */}
+      {errorMsg ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
+      ) : null}
+
+      {/* Form Fields */}
+      <View style={styles.formContainer}>
+        {/* First & Last Name Row */}
+        <View style={styles.row}>
+          <View style={[styles.inputWrapper, { flex: 1, marginRight: 8 }]}>
+            <TextInput
+              style={styles.inputField}
+              placeholder="First Name"
+              placeholderTextColor="#94a3b8"
+              value={firstName}
+              onChangeText={(text) => {
+                setFirstName(text);
+                if (errorMsg) setErrorMsg('');
+              }}
+            />
+          </View>
+          <View style={[styles.inputWrapper, { flex: 1 }]}>
+            <TextInput
+              style={styles.inputField}
+              placeholder="Last Name"
+              placeholderTextColor="#94a3b8"
+              value={lastName}
+              onChangeText={(text) => {
+                setLastName(text);
+                if (errorMsg) setErrorMsg('');
+              }}
+            />
+          </View>
+        </View>
+
+        {/* Email Address */}
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.inputField}
+            placeholder="Email Address"
+            placeholderTextColor="#94a3b8"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (errorMsg) setErrorMsg('');
+            }}
+          />
+        </View>
+
+        {/* Employee ID */}
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.inputField}
+            placeholder="Employee ID (e.g. PNG-EMP-108)"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="characters"
+            value={employeeId}
+            onChangeText={(text) => {
+              setEmployeeId(text);
+              if (errorMsg) setErrorMsg('');
+            }}
+          />
+        </View>
+
+        {/* Password */}
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={[styles.inputField, { paddingRight: 48 }]}
+            placeholder="Password"
+            placeholderTextColor="#94a3b8"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (errorMsg) setErrorMsg('');
+            }}
+          />
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setShowPassword(!showPassword)}
+            activeOpacity={0.7}
+          >
+            <Feather
+              name={showPassword ? 'eye' : 'eye-off'}
+              size={20}
+              color={showPassword ? '#006FD8' : '#94a3b8'}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Staff Category Multi-Select */}
+        <View style={styles.categorySection}>
+          <Text style={styles.categoryLabel}>STAFF CATEGORY (SELECT ONE OR MORE)</Text>
+          <View style={styles.categoryRow}>
+            {categories.map((cat) => {
+              const isSelected = selectedCategories.includes(cat.id);
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.catPill,
+                    isSelected && styles.catPillSelected,
+                  ]}
+                  onPress={() => toggleCategory(cat.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.catIcon}>{cat.icon}</Text>
+                  <Text
+                    style={[
+                      styles.catTitle,
+                      isSelected && styles.catTitleSelected,
+                    ]}
+                  >
+                    {cat.title}
+                  </Text>
+                  {isSelected && <Text style={styles.catCheck}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Submit Register Button */}
+        <TouchableOpacity
+          style={styles.btnRegister}
+          onPress={handleRegister}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.btnRegisterText}>Register</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.subtitle}>Register for one or more job roles</Text>
 
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>FULL NAME *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Priyantha Jayasuriya"
-          placeholderTextColor="#94a3b8"
-          value={name}
-          onChangeText={setName}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-          <Text style={styles.label}>MOBILE PHONE *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="+94 7X XXX XXXX"
-            placeholderTextColor="#94a3b8"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-          />
-        </View>
-
-        <View style={[styles.formGroup, { flex: 1 }]}>
-          <Text style={styles.label}>NIC NUMBER</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="1990XXXXXXXX"
-            placeholderTextColor="#94a3b8"
-            value={nic}
-            onChangeText={setNic}
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>WORK EMAIL ADDRESS *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="priyantha@pngexpress.lk"
-          placeholderTextColor="#94a3b8"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>CREATE PASSWORD *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Minimum 6 characters"
-          placeholderTextColor="#94a3b8"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-      </View>
-
-      {/* MULTI-ROLE CATEGORY CHECKBOX SECTION */}
-      <View style={styles.rolesSection}>
-        <Text style={styles.rolesTitle}>SELECT DUTY CATEGORIES (Choose 1, 2, or All 3):</Text>
-        <Text style={styles.rolesHint}>
-          If you work across multiple roles (e.g., Conductor who also drives, or Driver who handles mechanic repairs), check all that apply.
+      {/* Footer to Login */}
+      <View style={styles.footerSection}>
+        <Text style={styles.footerText}>
+          Already have an account?{' '}
+          <Text style={styles.loginLink} onPress={onBackToLogin}>
+            Sign In
+          </Text>
         </Text>
-
-        {ROLE_DEFINITIONS.map((role) => {
-          const isSelected = selectedRoles.includes(role.id);
-          return (
-            <TouchableOpacity
-              key={role.id}
-              style={[
-                styles.roleCard,
-                isSelected && { borderColor: role.color, backgroundColor: role.bgColor },
-              ]}
-              onPress={() => toggleRole(role.id)}
-            >
-              <Text style={styles.roleIcon}>{role.icon}</Text>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.roleCardTitle}>{role.title}</Text>
-                <Text style={styles.roleCardDesc}>{role.description}</Text>
-              </View>
-              <View
-                style={[
-                  styles.checkboxCircle,
-                  isSelected && { backgroundColor: role.color, borderColor: role.color },
-                ]}
-              >
-                {isSelected ? <Text style={styles.checkmark}>✓</Text> : null}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
       </View>
-
-      {/* Additional Role Specific Credentials */}
-      {selectedRoles.includes('driver') && (
-        <View style={styles.extraBox}>
-          <Text style={styles.extraLabel}>BUS DRIVER LICENSE NUMBER</Text>
-          <TextInput
-            style={styles.extraInput}
-            placeholder="e.g. B-9938120-DL"
-            placeholderTextColor="#94a3b8"
-            value={licenseNo}
-            onChangeText={setLicenseNo}
-          />
-        </View>
-      )}
-
-      {selectedRoles.includes('conductor') && (
-        <View style={[styles.extraBox, { borderColor: '#6ee7b7', backgroundColor: '#ecfdf5' }]}>
-          <Text style={[styles.extraLabel, { color: '#065f46' }]}>CONDUCTOR BADGE / PERMIT NO.</Text>
-          <TextInput
-            style={styles.extraInput}
-            placeholder="e.g. COND-WP-8821"
-            placeholderTextColor="#94a3b8"
-            value={conductorBadge}
-            onChangeText={setConductorBadge}
-          />
-        </View>
-      )}
-
-      {selectedRoles.includes('mechanic') && (
-        <View style={[styles.extraBox, { borderColor: '#fcd34d', backgroundColor: '#fffbeb' }]}>
-          <Text style={[styles.extraLabel, { color: '#92400e' }]}>MECHANIC SPECIALIZATION</Text>
-          <TextInput
-            style={styles.extraInput}
-            placeholder="e.g. Air Brakes, Suspension, AC Systems"
-            placeholderTextColor="#94a3b8"
-            value={mechanicSpecialty}
-            onChangeText={setMechanicSpecialty}
-          />
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.btnRegister} onPress={handleRegister}>
-        <Text style={styles.btnRegisterText}>Complete Registration ➔</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    backgroundColor: '#f8fafc',
     flexGrow: 1,
-  },
-  topBar: {
-    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 28,
+    paddingTop: 36,
+    paddingBottom: 32,
     justifyContent: 'space-between',
+    ...(Platform.OS === 'web'
+      ? {
+          maxWidth: 500,
+          width: '100%',
+          alignSelf: 'center',
+          minHeight: '100vh',
+        }
+      : {}),
+  },
+
+  // Brand Header
+  brandHeader: {
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 20,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
+  busIconContainer: {
+    width: '100%',
+    height: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
   },
-  backBtnText: {
-    fontSize: 12,
-    color: '#046bd2',
-    fontWeight: '700',
+  busImage: {
+    width: 135,
+    height: 85,
   },
-  subtitle: {
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#006FD8',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+  },
+  brandTagline: {
     fontSize: 13,
     color: '#64748b',
-    marginBottom: 16,
+    fontWeight: '500',
+    marginTop: 3,
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
-  formGroup: {
-    marginBottom: 12,
+
+  // Title Section
+  titleSection: {
+    marginBottom: 18,
   },
-  label: {
-    fontSize: 10,
+  titleMain: {
+    fontSize: 26,
     fontWeight: '800',
-    color: '#334155',
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  input: {
-    height: 44,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 14,
     color: '#0f172a',
+    letterSpacing: -0.3,
+  },
+  titleSub: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 3,
+  },
+
+  // Error Banner
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Form Section
+  formContainer: {
+    width: '100%',
   },
   row: {
     flexDirection: 'row',
   },
-  rolesSection: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#cbd5e1',
-    borderRadius: 12,
-    padding: 14,
-    marginVertical: 8,
+  inputWrapper: {
+    position: 'relative',
+    marginBottom: 13,
   },
-  rolesTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  rolesHint: {
-    fontSize: 11,
-    color: '#64748b',
-    lineHeight: 15,
-    marginBottom: 12,
-  },
-  roleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
+  inputField: {
+    height: 50,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: '#0f172a',
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 14,
+    top: 15,
+    padding: 2,
+  },
+
+  // Category Selector
+  categorySection: {
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  categoryLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
     marginBottom: 8,
   },
-  roleIcon: {
-    fontSize: 24,
+  categoryRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  roleCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  roleCardDesc: {
-    fontSize: 10,
-    color: '#64748b',
-    marginTop: 2,
-    lineHeight: 13,
-  },
-  checkboxCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  catPill: {
+    flex: 1,
+    height: 44,
+    backgroundColor: '#f8fafc',
     borderWidth: 1.5,
     borderColor: '#cbd5e1',
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkmark: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  extraBox: {
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#93c5fd',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-  },
-  extraLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#1e40af',
-    marginBottom: 4,
-  },
-  extraInput: {
-    height: 38,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    color: '#0f172a',
-  },
-  btnRegister: {
-    height: 48,
-    backgroundColor: '#10b981',
     borderRadius: 10,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-    shadowColor: '#10b981',
+    gap: 5,
+    paddingHorizontal: 4,
+  },
+  catPillSelected: {
+    backgroundColor: '#006FD8',
+    borderColor: '#006FD8',
+  },
+  catIcon: {
+    fontSize: 14,
+  },
+  catTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  catTitleSelected: {
+    color: '#FFFFFF',
+  },
+  catCheck: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+
+  // Register Button
+  btnRegister: {
+    height: 54,
+    backgroundColor: '#006FD8',
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#006FD8',
     shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 4,
   },
   btnRegisterText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  // Footer
+  footerSection: {
+    alignItems: 'center',
+    marginTop: 24,
+    paddingBottom: 8,
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#475569',
+  },
+  loginLink: {
+    color: '#006FD8',
+    fontWeight: '800',
   },
 });

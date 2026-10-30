@@ -131,7 +131,6 @@ export default function App() {
               staffList={staffUsers}
               onLoginSuccess={handleLoginSuccess}
               onNavigateRegister={() => setCurrentScreen('register')}
-              onBackToSplash={() => setCurrentScreen('splash')}
             />
           )}
 
