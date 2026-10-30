@@ -178,14 +178,14 @@ export default function StaffHeader({ user, activeRole, onSwitchRole, onLogout }
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#E2E8F0',
   },
   leftCol: {
     flex: 1,
@@ -199,13 +199,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   brandTitle: {
-    color: '#38bdf8',
+    color: '#006FD8',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   staffName: {
-    color: '#ffffff',
+    color: '#0F172A',
     fontSize: 14,
     fontWeight: '800',
     marginTop: 1,
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
   },
   shiftTime: {
-    color: '#94a3b8',
+    color: '#64748B',
     fontSize: 10,
     fontWeight: '600',
   },
@@ -235,36 +235,36 @@ const styles = StyleSheet.create({
   roleSwitcherBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#0284c7',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    borderColor: '#BFDBFE',
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 8,
     gap: 6,
   },
   roleSwitcherIcon: {
-    fontSize: 16,
+    fontSize: 15,
   },
   roleSwitcherLabel: {
-    color: '#38bdf8',
+    color: '#006FD8',
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   roleSwitcherRole: {
-    color: '#ffffff',
+    color: '#0F172A',
     fontSize: 11,
     fontWeight: '800',
   },
   logoutBtn: {
-    backgroundColor: '#334155',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 7,
+    paddingHorizontal: 11,
     borderRadius: 8,
   },
   logoutText: {
-    color: '#e2e8f0',
+    color: '#475569',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   // Modal ID Card Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -284,21 +284,21 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 20,
     elevation: 8,
   },
   idCardHeader: {
-    backgroundColor: '#0b1329',
+    backgroundColor: '#006FD8',
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
     borderBottomWidth: 3,
-    borderBottomColor: '#046bd2',
+    borderBottomColor: '#005BB5',
   },
   idCardHeaderSub: {
-    color: '#38bdf8',
+    color: '#BFDBFE',
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 1,
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#046bd2',
+    borderColor: '#006FD8',
     marginBottom: 8,
   },
   idAvatarLarge: {
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   idStaffEmpId: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#046bd2',
+    color: '#006FD8',
     marginTop: 2,
   },
   idStaffNic: {
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   },
   idRoleBadgeActive: {
     backgroundColor: '#eff6ff',
-    borderColor: '#046bd2',
+    borderColor: '#006FD8',
   },
   idRoleBadgeText: {
     fontSize: 10,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   idCloseBtn: {
     marginTop: 16,
     width: '100%',
-    backgroundColor: '#046bd2',
+    backgroundColor: '#006FD8',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',

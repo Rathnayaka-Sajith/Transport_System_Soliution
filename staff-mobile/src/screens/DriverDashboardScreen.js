@@ -150,7 +150,7 @@ export default function DriverDashboardScreen({ user }) {
               </View>
 
               <View style={styles.telemetryBox}>
-                <Text style={[styles.telemetryVal, { color: '#046bd2' }]}>38/40</Text>
+                <Text style={[styles.telemetryVal, { color: '#006FD8' }]}>38/40</Text>
                 <Text style={styles.telemetryUnit}>Seats</Text>
                 <Text style={styles.telemetryLabel}>Passengers</Text>
               </View>
@@ -408,35 +408,45 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingBottom: 40,
+    backgroundColor: '#FFFFFF',
   },
   banner: {
-    backgroundColor: '#0b1329',
-    borderRadius: 14,
+    backgroundColor: '#006FD8',
+    borderRadius: 16,
     padding: 18,
-    marginBottom: 12,
+    marginBottom: 14,
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 4,
   },
   bannerBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#046bd2',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     paddingVertical: 3,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     borderRadius: 6,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   bannerBadgeText: {
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   bannerTitle: {
     color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
   bannerSub: {
-    color: '#94a3b8',
+    color: '#E0F2FE',
     fontSize: 12,
+    fontWeight: '600',
     marginTop: 4,
   },
 
@@ -444,20 +454,30 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 4,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 1,
   },
   tabBtn: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 9,
   },
   tabBtnActive: {
-    backgroundColor: '#046bd2',
+    backgroundColor: '#006FD8',
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
   },
   tabBtnText: {
     fontSize: 11,
@@ -466,16 +486,22 @@ const styles = StyleSheet.create({
   },
   tabBtnTextActive: {
     color: '#ffffff',
+    fontWeight: '800',
   },
 
   // Cockpit Telemetry
   telemetryCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 12,
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 1,
   },
   cardHeaderSmall: {
     fontSize: 10,
@@ -546,7 +572,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusPillText: {
-    color: '#046bd2',
+    color: '#006FD8',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -576,10 +602,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btnTripToggle: {
-    backgroundColor: '#046bd2',
+    backgroundColor: '#006FD8',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
   },
   btnTripText: {
     color: '#ffffff',
@@ -631,10 +662,16 @@ const styles = StyleSheet.create({
   // Timeline
   timelineCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 1,
   },
   timelineRow: {
     flexDirection: 'row',
@@ -663,16 +700,21 @@ const styles = StyleSheet.create({
   timelineTime: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#046bd2',
+    color: '#006FD8',
   },
 
   // Checklist
   checklistCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 1,
   },
   checklistHeader: {
     flexDirection: 'row',
@@ -691,21 +733,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   scoreBadge: {
-    backgroundColor: '#ecfdf5',
+    backgroundColor: '#eff6ff',
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#a7f3d0',
+    borderColor: '#bfdbfe',
   },
   scoreText: {
-    color: '#059669',
+    color: '#006FD8',
     fontSize: 12,
     fontWeight: '800',
   },
   btnCertifyAll: {
-    backgroundColor: '#046bd2',
-    paddingVertical: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 9,
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 12,
@@ -736,8 +778,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxDone: {
-    backgroundColor: '#046bd2',
-    borderColor: '#046bd2',
+    backgroundColor: '#006FD8',
+    borderColor: '#006FD8',
   },
   checkboxTick: {
     color: '#ffffff',
@@ -757,10 +799,15 @@ const styles = StyleSheet.create({
   // Hazards
   hazardsCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 1,
   },
   quickHazardRow: {
     flexDirection: 'row',

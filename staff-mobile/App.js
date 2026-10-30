@@ -89,7 +89,7 @@ export default function App() {
   };
 
   const isSplash = currentScreen === 'splash';
-  const isWhiteTheme = currentScreen === 'login' || currentScreen === 'register' || currentScreen === 'select-role';
+  const isWhiteTheme = currentScreen === 'login' || currentScreen === 'register' || currentScreen === 'select-role' || currentScreen === 'dashboard';
 
   return (
     <SafeAreaView
