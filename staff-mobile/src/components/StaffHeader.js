@@ -7,150 +7,188 @@ import {
   Modal,
   Platform,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 
 export default function StaffHeader({ user, activeRole, onSwitchRole, onLogout }) {
-  const [showIdModal, setShowIdModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [hasUnreadNotification, setHasUnreadNotification] = useState(true);
 
-  const getRoleIcon = (role) => {
-    switch (role) {
-      case 'driver': return '🚌';
-      case 'conductor': return '🎫';
-      case 'mechanic': return '🔧';
-      default: return '🚍';
-    }
-  };
+  const cleanName = (user?.name || 'Sunil Rathnayaka').replace(/^Mr\.?\s*/i, '');
+  const roleTitle = activeRole ? activeRole.charAt(0).toUpperCase() + activeRole.slice(1) : 'Staff';
 
-  const getRoleTitle = (role) => {
-    switch (role) {
-      case 'driver': return 'Driver';
-      case 'conductor': return 'Conductor';
-      case 'mechanic': return 'Mechanic';
-      default: return 'Staff';
-    }
+  const handleOpenNotifications = () => {
+    setShowNotificationModal(true);
+    setHasUnreadNotification(false);
   };
 
   return (
     <>
       <View style={styles.header}>
-        {/* Left: Tap to view digital ID card */}
+        {/* Left: Account Icon Button */}
         <TouchableOpacity
-          style={styles.leftCol}
-          onPress={() => setShowIdModal(true)}
-          activeOpacity={0.8}
+          style={styles.iconBtn}
+          onPress={() => setShowAccountModal(true)}
+          activeOpacity={0.7}
+          accessibilityLabel="Account Options"
         >
-          <View style={styles.avatarRow}>
-            <Text style={styles.staffAvatar}>{user?.avatar || '👨‍✈️'}</Text>
-            <View>
-              <Text style={styles.staffName}>{user?.name || 'Staff Member'}</Text>
-            </View>
+          <View style={styles.avatarCircle}>
+            <Feather name="user" size={19} color="#006FD8" />
           </View>
         </TouchableOpacity>
 
-        {/* Right: Role Switcher & Logout */}
-        <View style={styles.rightCol}>
-          {user?.roles?.length > 1 && (
-            <TouchableOpacity
-              style={styles.roleSwitcherBtn}
-              onPress={onSwitchRole}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.roleSwitcherIcon}>{getRoleIcon(activeRole)}</Text>
-              <View>
-                <Text style={styles.roleSwitcherLabel}>ACTIVE DUTY</Text>
-                <Text style={styles.roleSwitcherRole}>{getRoleTitle(activeRole)} ⇄</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={onLogout}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+        {/* Center: PNG Express Minimal Header */}
+        <View style={styles.centerCol}>
+          <Text style={styles.centerBrand}>PNG EXPRESS</Text>
         </View>
+
+        {/* Right: Notification Mark Icon */}
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={handleOpenNotifications}
+          activeOpacity={0.7}
+          accessibilityLabel="Notifications"
+        >
+          <View style={styles.bellWrapper}>
+            <Feather name="bell" size={21} color="#0F172A" />
+            {hasUnreadNotification && <View style={styles.unreadDot} />}
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Digital Employee ID Card Modal */}
+      {/* Account Profile Modal */}
       <Modal
-        visible={showIdModal}
+        visible={showAccountModal}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowIdModal(false)}
+        animationType="fade"
+        onRequestClose={() => setShowAccountModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.idCardBox}>
-            <View style={styles.idCardHeader}>
-              <Text style={styles.idCardHeaderSub}>SRI LANKA NATIONAL EXPRESS LOGISTICS</Text>
-              <Text style={styles.idCardHeaderTitle}>PNG EXPRESS STAFF CREDENTIAL</Text>
-            </View>
-
-            <View style={styles.idCardBody}>
-              <View style={styles.idAvatarLargeBox}>
-                <Text style={styles.idAvatarLarge}>{user?.avatar || '👨‍✈️'}</Text>
-              </View>
-
-              <Text style={styles.idStaffFullName}>{user?.name || 'Staff Member'}</Text>
-              <Text style={styles.idStaffEmpId}>EMP ID: {user?.employeeId || 'PNG-STAFF-100'}</Text>
-              <Text style={styles.idStaffNic}>NIC: {user?.nic || '198539201948'}</Text>
-
-              {/* Roles Badges */}
-              <View style={styles.idRolesRow}>
-                {user?.roles?.map((r) => (
-                  <View key={r} style={[styles.idRoleBadge, r === activeRole && styles.idRoleBadgeActive]}>
-                    <Text style={styles.idRoleBadgeText}>
-                      {getRoleIcon(r)} {r.toUpperCase()}
-                      {r === activeRole ? ' (ON DUTY)' : ''}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Specific Licenses Info */}
-              <View style={styles.idDetailsList}>
-                {user?.driverDetails && (
-                  <View style={styles.idDetailItem}>
-                    <Text style={styles.idDetailLabel}>DRIVING LICENSE</Text>
-                    <Text style={styles.idDetailValue}>
-                      {user.driverDetails.licenseNo} (Exp: {user.driverDetails.licenseExpiry})
-                    </Text>
-                  </View>
-                )}
-
-                {user?.conductorDetails && (
-                  <View style={styles.idDetailItem}>
-                    <Text style={styles.idDetailLabel}>CONDUCTOR BADGE</Text>
-                    <Text style={styles.idDetailValue}>
-                      {user.conductorDetails.badgeNo} • {user.conductorDetails.depot}
-                    </Text>
-                  </View>
-                )}
-
-                {user?.mechanicDetails && (
-                  <View style={styles.idDetailItem}>
-                    <Text style={styles.idDetailLabel}>MECHANIC CERTIFICATION</Text>
-                    <Text style={styles.idDetailValue}>
-                      {user.mechanicDetails.specialization}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.idSecurityFooter}>
-                <Text style={styles.idSecurityText}>🔒 Tamper-Proof Cryptographic NFC Staff Token</Text>
-                <Text style={styles.idHotlineText}>Fleet Control Hotline: +94 11 234 5678</Text>
-              </View>
-
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAccountModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalHeaderTitle}>Account Profile</Text>
               <TouchableOpacity
-                style={styles.idCloseBtn}
-                onPress={() => setShowIdModal(false)}
+                onPress={() => setShowAccountModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.idCloseBtnText}>Close ID Credential</Text>
+                <Feather name="x" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+
+            {/* User Info */}
+            <View style={styles.userProfileSection}>
+              <View style={styles.largeAvatarCircle}>
+                <Feather name="user" size={32} color="#006FD8" />
+              </View>
+              <Text style={styles.userNameText}>Mr. {cleanName}</Text>
+              <Text style={styles.userEmpIdText}>
+                ID: {user?.employeeId || 'PNG-EMP-101'}
+              </Text>
+              <View style={styles.activeRolePill}>
+                <Text style={styles.activeRolePillText}>Current Duty: {roleTitle}</Text>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actionList}>
+              {/* Option: Switch Role (if multirole) */}
+              {user?.roles?.length > 1 && (
+                <TouchableOpacity
+                  style={styles.switchRoleBtn}
+                  onPress={() => {
+                    setShowAccountModal(false);
+                    if (onSwitchRole) onSwitchRole();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="refresh-cw" size={17} color="#006FD8" />
+                  <Text style={styles.switchRoleBtnText}>Switch Duty Role</Text>
+                  <Feather name="chevron-right" size={16} color="#94A3B8" style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
+              )}
+
+              {/* Option: Logout */}
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={() => {
+                  setShowAccountModal(false);
+                  if (onLogout) onLogout();
+                }}
+                activeOpacity={0.8}
+              >
+                <Feather name="log-out" size={17} color="#EF4444" />
+                <Text style={styles.logoutBtnText}>Log Out</Text>
+                <Feather name="chevron-right" size={16} color="#EF4444" style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Notification Modal */}
+      <Modal
+        visible={showNotificationModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotificationModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowNotificationModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="bell" size={18} color="#006FD8" />
+                <Text style={styles.modalHeaderTitle}>Notifications</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowNotificationModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Notification List */}
+            <View style={styles.notificationItem}>
+              <View style={styles.notifBadgeRow}>
+                <View style={styles.notifAlertPill}>
+                  <Text style={styles.notifAlertText}>15 MINS PRIOR ALERT</Text>
+                </View>
+                <Text style={styles.notifTimeAgo}>Just now</Text>
+              </View>
+
+              <Text style={styles.notifTitleText}>You have trip at 09:30 PM</Text>
+              <Text style={styles.notifBodyText}>
+                Route 87: Colombo Central ➔ Jaffna Town. Coach NB-4592 is scheduled for boarding in 15 minutes.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeNotifBtn}
+              onPress={() => setShowNotificationModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.closeNotifBtnText}>Close</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </>
   );
@@ -159,224 +197,233 @@ export default function StaffHeader({ user, activeRole, onSwitchRole, onLogout }
 const styles = StyleSheet.create({
   header: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#F1F5F9',
   },
-  leftCol: {
-    flex: 1,
-  },
-  avatarRow: {
-    flexDirection: 'row',
+  iconBtn: {
+    width: 42,
+    height: 42,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
   },
-  staffAvatar: {
-    fontSize: 28,
-  },
-  staffName: {
-    color: '#0F172A',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  rightCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  roleSwitcherBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#EFF6FF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#BFDBFE',
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 8,
-    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  roleSwitcherIcon: {
-    fontSize: 15,
+  centerCol: {
+    alignItems: 'center',
   },
-  roleSwitcherLabel: {
+  centerBrand: {
+    fontSize: 13,
+    fontWeight: '900',
     color: '#006FD8',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
   },
-  roleSwitcherRole: {
-    color: '#0F172A',
-    fontSize: 11,
-    fontWeight: '800',
+  bellWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  logoutBtn: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-    borderRadius: 8,
-  },
-  logoutText: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '700',
+  unreadDot: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
 
-  // Modal ID Card Styles
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  idCardBox: {
+  modalCard: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 10 },
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 8 },
     shadowRadius: 20,
     elevation: 8,
   },
-  idCardHeader: {
-    backgroundColor: '#006FD8',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+  modalHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: '#005BB5',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  idCardHeaderSub: {
-    color: '#BFDBFE',
-    fontSize: 8,
+  modalHeaderTitle: {
+    fontSize: 16,
     fontWeight: '800',
-    letterSpacing: 1,
+    color: '#0F172A',
   },
-  idCardHeaderTitle: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  idCardBody: {
-    padding: 20,
+
+  // User Profile in Modal
+  userProfileSection: {
     alignItems: 'center',
+    paddingVertical: 18,
   },
-  idAvatarLargeBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#eff6ff',
+  largeAvatarCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 2.5,
+    borderColor: '#006FD8',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#006FD8',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  idAvatarLarge: {
-    fontSize: 40,
-  },
-  idStaffFullName: {
+  userNameText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
-  idStaffEmpId: {
+  userEmpIdText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#006FD8',
+    color: '#64748B',
     marginTop: 2,
   },
-  idStaffNic: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
-  },
-  idRolesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'center',
-    marginTop: 12,
-    marginBottom: 14,
-  },
-  idRoleBadge: {
-    backgroundColor: '#f1f5f9',
+  activeRolePill: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
     paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  activeRolePillText: {
+    color: '#006FD8',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+
+  // Action Buttons in Modal
+  actionList: {
+    gap: 10,
+    marginTop: 8,
+  },
+  switchRoleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 10,
+  },
+  switchRoleBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#006FD8',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 10,
+  },
+  logoutBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+
+  // Notification Modal Styles
+  notificationItem: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  notifBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  notifAlertPill: {
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#BFDBFE',
   },
-  idRoleBadgeActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#006FD8',
-  },
-  idRoleBadgeText: {
+  notifAlertText: {
+    color: '#006FD8',
     fontSize: 10,
     fontWeight: '800',
-    color: '#0f172a',
-  },
-  idDetailsList: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  idDetailItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#edf2f7',
-    paddingBottom: 6,
-  },
-  idDetailLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#64748b',
     letterSpacing: 0.5,
   },
-  idDetailValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginTop: 1,
+  notifTimeAgo: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
   },
-  idSecurityFooter: {
-    marginTop: 14,
-    alignItems: 'center',
-  },
-  idSecurityText: {
-    fontSize: 10,
-    color: '#10b981',
-    fontWeight: '700',
-  },
-  idHotlineText: {
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  idCloseBtn: {
-    marginTop: 16,
-    width: '100%',
-    backgroundColor: '#006FD8',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  idCloseBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
+  notifTitleText: {
+    fontSize: 15,
     fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  notifBodyText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  closeNotifBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  closeNotifBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
