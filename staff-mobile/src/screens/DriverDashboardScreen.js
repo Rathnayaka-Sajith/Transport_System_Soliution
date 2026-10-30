@@ -7,44 +7,17 @@ import {
   ScrollView,
   Alert,
   Modal,
-  TextInput,
 } from 'react-native';
-import { MOCK_DRIVER_TRIP, MOCK_CHECKLIST } from '../data/mockDatabase';
+import { MOCK_DRIVER_TRIP } from '../data/mockDatabase';
 
 export default function DriverDashboardScreen({ user }) {
-  const [activeTab, setActiveTab] = useState('cockpit'); // 'cockpit' | 'checklist' | 'hazards'
   const [tripStatus, setTripStatus] = useState('SCHEDULED'); // 'SCHEDULED' | 'IN_TRANSIT' | 'REST_HALT' | 'COMPLETED'
-  const [checklist, setChecklist] = useState(MOCK_CHECKLIST);
   const [sosModalVisible, setSosModalVisible] = useState(false);
   const [sosReason, setSosReason] = useState('Engine Overheat / Coolant Warning');
   const [sosDispatched, setSosDispatched] = useState(false);
 
-  // Road Hazards & Delays
-  const [reportedHazards, setReportedHazards] = useState([
-    { id: 1, type: 'Heavy Rain / Wet Road', delay: '+15 mins', location: 'Mirigama Expressway Section', time: '08:45 PM' },
-  ]);
-
-  const toggleChecklistItem = (id) => {
-    setChecklist((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, done: !item.done } : item))
-    );
-  };
-
-  const handleCertifyAll = () => {
-    setChecklist((prev) => prev.map((item) => ({ ...item, done: true })));
-    Alert.alert('Pre-Trip Inspection', 'All 8 vehicle safety points certified.');
-  };
-
   const handleTripToggle = () => {
     if (tripStatus === 'SCHEDULED') {
-      const pending = checklist.filter((c) => !c.done);
-      if (pending.length > 0) {
-        Alert.alert(
-          'Checklist Incomplete',
-          `Please certify all safety checklist items before departure (${pending.length} pending items).`
-        );
-        return;
-      }
       setTripStatus('IN_TRANSIT');
       Alert.alert('Journey Started', 'GPS tracking & passenger telematics live.');
     } else if (tripStatus === 'IN_TRANSIT') {
@@ -73,20 +46,6 @@ export default function DriverDashboardScreen({ user }) {
     );
   };
 
-  const handleAddHazard = (type, delay) => {
-    const newH = {
-      id: Date.now(),
-      type,
-      delay,
-      location: 'Current GPS Location (Route 87)',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setReportedHazards([newH, ...reportedHazards]);
-    Alert.alert('Incident Logged', `${type} reported to central dispatch.`);
-  };
-
-  const certifiedCount = checklist.filter((c) => c.done).length;
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {/* Route & Coach Header Card */}
@@ -100,68 +59,29 @@ export default function DriverDashboardScreen({ user }) {
         </Text>
       </View>
 
-      {/* Sub Tabs */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'cockpit' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('cockpit')}
-        >
-          <Text style={[styles.tabBtnText, activeTab === 'cockpit' && styles.tabBtnTextActive]}>
-            🧭 Cockpit & Route
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'checklist' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('checklist')}
-        >
-          <Text style={[styles.tabBtnText, activeTab === 'checklist' && styles.tabBtnTextActive]}>
-            📋 Pre-Trip ({certifiedCount}/8)
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'hazards' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('hazards')}
-        >
-          <Text style={[styles.tabBtnText, activeTab === 'hazards' && styles.tabBtnTextActive]}>
-            ⚠️ Road Delays
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* TAB 1: COCKPIT & ROUTE */}
-      {activeTab === 'cockpit' && (
-        <>
-          {/* Telemetry Cockpit Gauges */}
-          <View style={styles.telemetryCard}>
-            <Text style={styles.cardHeaderSmall}>LIVE VEHICLE TELEMETRY & STATUS</Text>
-            <View style={styles.telemetryGrid}>
-              <View style={styles.telemetryBox}>
-                <Text style={styles.telemetryVal}>{tripStatus === 'IN_TRANSIT' ? '68' : '0'}</Text>
-                <Text style={styles.telemetryUnit}>km/h</Text>
-                <Text style={styles.telemetryLabel}>Speed</Text>
-              </View>
-
-              <View style={styles.telemetryBox}>
-                <Text style={[styles.telemetryVal, { color: '#10b981' }]}>78%</Text>
-                <Text style={styles.telemetryUnit}>Diesel</Text>
-                <Text style={styles.telemetryLabel}>Fuel Tank</Text>
-              </View>
-
-              <View style={styles.telemetryBox}>
-                <Text style={[styles.telemetryVal, { color: '#006FD8' }]}>38/40</Text>
-                <Text style={styles.telemetryUnit}>Seats</Text>
-                <Text style={styles.telemetryLabel}>Passengers</Text>
-              </View>
-
-              <View style={styles.telemetryBox}>
-                <Text style={[styles.telemetryVal, { color: '#8b5cf6' }]}>22m</Text>
-                <Text style={styles.telemetryUnit}>Countdown</Text>
-                <Text style={styles.telemetryLabel}>Next Halt</Text>
-              </View>
-            </View>
+      {/* Telemetry Cockpit Gauges */}
+      <View style={styles.telemetryCard}>
+        <Text style={styles.cardHeaderSmall}>LIVE VEHICLE TELEMETRY & STATUS</Text>
+        <View style={styles.telemetryGrid}>
+          <View style={styles.telemetryBox}>
+            <Text style={styles.telemetryVal}>{tripStatus === 'IN_TRANSIT' ? '68' : '0'}</Text>
+            <Text style={styles.telemetryUnit}>km/h</Text>
+            <Text style={styles.telemetryLabel}>Speed</Text>
           </View>
+
+          <View style={styles.telemetryBox}>
+            <Text style={[styles.telemetryVal, { color: '#006FD8' }]}>38/40</Text>
+            <Text style={styles.telemetryUnit}>Seats</Text>
+            <Text style={styles.telemetryLabel}>Passengers</Text>
+          </View>
+
+          <View style={styles.telemetryBox}>
+            <Text style={[styles.telemetryVal, { color: '#8b5cf6' }]}>22m</Text>
+            <Text style={styles.telemetryUnit}>Countdown</Text>
+            <Text style={styles.telemetryLabel}>Next Halt</Text>
+          </View>
+        </View>
+      </View>
 
           {/* Trip Control Card */}
           <View style={styles.statusCard}>
@@ -264,97 +184,6 @@ export default function DriverDashboardScreen({ user }) {
               </View>
             ))}
           </View>
-        </>
-      )}
-
-      {/* TAB 2: PRE-TRIP CHECKLIST */}
-      {activeTab === 'checklist' && (
-        <View style={styles.checklistCard}>
-          <View style={styles.checklistHeader}>
-            <View>
-              <Text style={styles.checklistTitle}>Vehicle Safety Inspection</Text>
-              <Text style={styles.checklistSub}>
-                Mandatory Sri Lanka NTC Expressway Regulation
-              </Text>
-            </View>
-            <View style={styles.scoreBadge}>
-              <Text style={styles.scoreText}>{certifiedCount}/8</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.btnCertifyAll} onPress={handleCertifyAll}>
-            <Text style={styles.btnCertifyAllText}>✓ Certify All 8 Items as Safe</Text>
-          </TouchableOpacity>
-
-          {checklist.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.checklistItem, item.done && styles.checklistItemDone]}
-              onPress={() => toggleChecklistItem(item.id)}
-            >
-              <View style={[styles.checkbox, item.done && styles.checkboxDone]}>
-                <Text style={styles.checkboxTick}>{item.done ? '✓' : ''}</Text>
-              </View>
-              <Text style={[styles.checklistText, item.done && styles.checklistTextDone]}>
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* TAB 3: HAZARDS & DELAYS */}
-      {activeTab === 'hazards' && (
-        <View style={styles.hazardsCard}>
-          <Text style={styles.checklistTitle}>⚠️ Road Hazards & Delay Reporter</Text>
-          <Text style={styles.checklistSub}>
-            Broadcast road conditions to central dispatch and incoming passengers.
-          </Text>
-
-          <View style={styles.quickHazardRow}>
-            <TouchableOpacity
-              style={styles.hazardQuickBtn}
-              onPress={() => handleAddHazard('Heavy Monsoon Rain', '+20 mins')}
-            >
-              <Text style={styles.hazardQuickIcon}>🌧️</Text>
-              <Text style={styles.hazardQuickTitle}>Heavy Rain</Text>
-              <Text style={styles.hazardQuickDelay}>+20m delay</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.hazardQuickBtn}
-              onPress={() => handleAddHazard('Expressway Toll Congestion', '+15 mins')}
-            >
-              <Text style={styles.hazardQuickIcon}>🚧</Text>
-              <Text style={styles.hazardQuickTitle}>Toll Queue</Text>
-              <Text style={styles.hazardQuickDelay}>+15m delay</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.hazardQuickBtn}
-              onPress={() => handleAddHazard('Police Safety Checkpoint', '+10 mins')}
-            >
-              <Text style={styles.hazardQuickIcon}>👮</Text>
-              <Text style={styles.hazardQuickTitle}>Police Check</Text>
-              <Text style={styles.hazardQuickDelay}>+10m delay</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[styles.cardHeaderSmall, { marginTop: 18 }]}>ACTIVE LOGGED INCIDENTS:</Text>
-
-          {reportedHazards.map((h) => (
-            <View key={h.id} style={styles.loggedHazardItem}>
-              <View style={styles.loggedHazardLeft}>
-                <Text style={styles.loggedHazardType}>{h.type}</Text>
-                <Text style={styles.loggedHazardLocation}>{h.location} • {h.time}</Text>
-              </View>
-              <View style={styles.loggedHazardDelayBadge}>
-                <Text style={styles.loggedHazardDelayText}>{h.delay}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
 
       {/* SOS Modal */}
       <Modal
@@ -448,45 +277,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
-  },
-
-  // Tabs
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderRadius: 9,
-  },
-  tabBtnActive: {
-    backgroundColor: '#006FD8',
-    shadowColor: '#006FD8',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tabBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  tabBtnTextActive: {
-    color: '#ffffff',
-    fontWeight: '800',
   },
 
   // Cockpit Telemetry
@@ -701,178 +491,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#006FD8',
-  },
-
-  // Checklist
-  checklistCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOpacity: 0.03,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  checklistHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  checklistTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  checklistSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  scoreBadge: {
-    backgroundColor: '#eff6ff',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  scoreText: {
-    color: '#006FD8',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  btnCertifyAll: {
-    backgroundColor: '#006FD8',
-    paddingVertical: 9,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  btnCertifyAllText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  checklistItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    gap: 12,
-  },
-  checklistItemDone: {
-    opacity: 0.85,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#94a3b8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxDone: {
-    backgroundColor: '#006FD8',
-    borderColor: '#006FD8',
-  },
-  checkboxTick: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  checklistText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0f172a',
-    flex: 1,
-  },
-  checklistTextDone: {
-    color: '#475569',
-  },
-
-  // Hazards
-  hazardsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOpacity: 0.03,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  quickHazardRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  hazardQuickBtn: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-  },
-  hazardQuickIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  hazardQuickTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0f172a',
-    textAlign: 'center',
-  },
-  hazardQuickDelay: {
-    fontSize: 10,
-    color: '#ef4444',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  loggedHazardItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fffbeb',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#fde68a',
-  },
-  loggedHazardLeft: {
-    flex: 1,
-  },
-  loggedHazardType: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#92400e',
-  },
-  loggedHazardLocation: {
-    fontSize: 10,
-    color: '#b45309',
-    marginTop: 2,
-  },
-  loggedHazardDelayBadge: {
-    backgroundColor: '#fef3c7',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  loggedHazardDelayText: {
-    color: '#b45309',
-    fontWeight: '800',
-    fontSize: 11,
   },
 
   // Modal
