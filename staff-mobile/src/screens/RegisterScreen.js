@@ -16,6 +16,7 @@ export default function RegisterScreen({ onRegisterSuccess, onBackToLogin }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -39,8 +40,15 @@ export default function RegisterScreen({ onRegisterSuccess, onBackToLogin }) {
   const handleRegister = () => {
     setErrorMsg('');
 
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !employeeId.trim() || !password) {
-      setErrorMsg('Please fill in all fields (Name, Email, Employee ID, Password).');
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !email.trim() ||
+      !phone.trim() ||
+      !employeeId.trim() ||
+      !password
+    ) {
+      setErrorMsg('Please fill in all fields (Name, Email, Phone, Employee ID, Password).');
       return;
     }
 
@@ -56,7 +64,7 @@ export default function RegisterScreen({ onRegisterSuccess, onBackToLogin }) {
       name: fullName,
       email: email.trim().toLowerCase(),
       password: password,
-      phone: '+94 77 000 0000',
+      phone: phone.trim(),
       nic: '2000' + Math.floor(10000000 + Math.random() * 90000000),
       avatar: selectedCategories.includes('driver')
         ? '👨‍✈️'
@@ -161,6 +169,21 @@ export default function RegisterScreen({ onRegisterSuccess, onBackToLogin }) {
             value={email}
             onChangeText={(text) => {
               setEmail(text);
+              if (errorMsg) setErrorMsg('');
+            }}
+          />
+        </View>
+
+        {/* Mobile Phone Number */}
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.inputField}
+            placeholder="Phone Number (e.g. +94 7X XXX XXXX)"
+            placeholderTextColor="#94a3b8"
+            keyboardType="phone-pad"
+            value={phone}
+            onChangeText={(text) => {
+              setPhone(text);
               if (errorMsg) setErrorMsg('');
             }}
           />
