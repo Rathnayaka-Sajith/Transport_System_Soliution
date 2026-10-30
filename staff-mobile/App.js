@@ -89,15 +89,28 @@ export default function App() {
   };
 
   const isSplash = currentScreen === 'splash';
+  const isLogin = currentScreen === 'login';
 
   return (
-    <SafeAreaView style={[styles.container, isSplash && { backgroundColor: '#006FD8' }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        isSplash && { backgroundColor: '#006FD8' },
+        isLogin && { backgroundColor: '#FFFFFF' },
+      ]}
+    >
       <StatusBar
-        barStyle="light-content"
-        backgroundColor={isSplash ? '#006FD8' : '#0b1329'}
+        barStyle={isLogin ? 'dark-content' : 'light-content'}
+        backgroundColor={isSplash ? '#006FD8' : isLogin ? '#FFFFFF' : '#0b1329'}
       />
 
-      <View style={[styles.phoneFrame, isSplash && { backgroundColor: '#006FD8', borderColor: '#005bb5' }]}>
+      <View
+        style={[
+          styles.phoneFrame,
+          isSplash && { backgroundColor: '#006FD8', borderColor: '#005bb5' },
+          isLogin && { backgroundColor: '#FFFFFF', borderColor: '#e2e8f0' },
+        ]}
+      >
         {/* Persistent Header when logged in */}
         {currentUser && currentScreen === 'dashboard' ? (
           <StaffHeader
