@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 28,
-    paddingTop: 36,
+    paddingTop: 40,
     paddingBottom: 32,
     justifyContent: 'space-between',
     ...(Platform.OS === 'web'

@@ -89,26 +89,26 @@ export default function App() {
   };
 
   const isSplash = currentScreen === 'splash';
-  const isLogin = currentScreen === 'login';
+  const isWhiteTheme = currentScreen === 'login' || currentScreen === 'register' || currentScreen === 'select-role';
 
   return (
     <SafeAreaView
       style={[
         styles.container,
         isSplash && { backgroundColor: '#006FD8' },
-        isLogin && { backgroundColor: '#FFFFFF' },
+        isWhiteTheme && { backgroundColor: '#FFFFFF' },
       ]}
     >
       <StatusBar
-        barStyle={isLogin ? 'dark-content' : 'light-content'}
-        backgroundColor={isSplash ? '#006FD8' : isLogin ? '#FFFFFF' : '#0b1329'}
+        barStyle={isWhiteTheme ? 'dark-content' : 'light-content'}
+        backgroundColor={isSplash ? '#006FD8' : isWhiteTheme ? '#FFFFFF' : '#0b1329'}
       />
 
       <View
         style={[
           styles.phoneFrame,
           isSplash && { backgroundColor: '#006FD8', borderColor: '#005bb5' },
-          isLogin && { backgroundColor: '#FFFFFF', borderColor: '#e2e8f0' },
+          isWhiteTheme && { backgroundColor: '#FFFFFF', borderColor: '#e2e8f0' },
         ]}
       >
         {/* Persistent Header when logged in */}
@@ -121,7 +121,13 @@ export default function App() {
           />
         ) : null}
 
-        <View style={[styles.screenBody, isSplash && { backgroundColor: '#006FD8' }]}>
+        <View
+          style={[
+            styles.screenBody,
+            isSplash && { backgroundColor: '#006FD8' },
+            isWhiteTheme && { backgroundColor: '#FFFFFF' },
+          ]}
+        >
           {currentScreen === 'splash' && (
             <WelcomeSplashScreen onContinue={() => setCurrentScreen('login')} />
           )}
