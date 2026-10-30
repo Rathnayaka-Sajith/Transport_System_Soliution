@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { INITIAL_STAFF_USERS } from '../data/mockDatabase';
 
-export default function LoginScreen({ onLoginSuccess, onNavigateRegister, staffList }) {
+export default function LoginScreen({ onLoginSuccess, onNavigateRegister, onBackToSplash, staffList }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -43,6 +43,12 @@ export default function LoginScreen({ onLoginSuccess, onNavigateRegister, staffL
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {onBackToSplash ? (
+        <TouchableOpacity style={styles.topBackSplash} onPress={onBackToSplash}>
+          <Text style={styles.topBackSplashText}>← Welcome Splash Screen</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <View style={styles.topIconBox}>
         <Text style={styles.topEmoji}>🚍</Text>
       </View>
@@ -122,6 +128,21 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: '#f8fafc',
     flexGrow: 1,
+  },
+  topBackSplash: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#eff6ff',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  topBackSplashText: {
+    fontSize: 11,
+    color: '#006FD8',
+    fontWeight: '700',
   },
   topIconBox: {
     width: 64,

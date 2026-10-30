@@ -31,6 +31,7 @@ if (Platform.OS === 'web') {
 
 import { INITIAL_STAFF_USERS } from './src/data/mockDatabase';
 import StaffHeader from './src/components/StaffHeader';
+import WelcomeSplashScreen from './src/screens/WelcomeSplashScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import RoleSelectorScreen from './src/screens/RoleSelectorScreen';
@@ -40,7 +41,7 @@ import MechanicDashboardScreen from './src/screens/MechanicDashboardScreen';
 
 export default function App() {
   const [staffUsers, setStaffUsers] = useState(INITIAL_STAFF_USERS);
-  const [currentScreen, setCurrentScreen] = useState('login'); // 'login' | 'register' | 'select-role' | 'dashboard'
+  const [currentScreen, setCurrentScreen] = useState('splash'); // 'splash' | 'login' | 'register' | 'select-role' | 'dashboard'
   const [currentUser, setCurrentUser] = useState(null);
   const [activeRole, setActiveRole] = useState(null); // 'driver' | 'conductor' | 'mechanic'
 
@@ -84,14 +85,19 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     setActiveRole(null);
-    setCurrentScreen('login');
+    setCurrentScreen('splash');
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0b1329" />
+  const isSplash = currentScreen === 'splash';
 
-      <View style={styles.phoneFrame}>
+  return (
+    <SafeAreaView style={[styles.container, isSplash && { backgroundColor: '#006FD8' }]}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={isSplash ? '#006FD8' : '#0b1329'}
+      />
+
+      <View style={[styles.phoneFrame, isSplash && { backgroundColor: '#006FD8', borderColor: '#005bb5' }]}>
         {/* Persistent Header when logged in */}
         {currentUser && currentScreen === 'dashboard' ? (
           <StaffHeader
@@ -102,12 +108,17 @@ export default function App() {
           />
         ) : null}
 
-        <View style={styles.screenBody}>
+        <View style={[styles.screenBody, isSplash && { backgroundColor: '#006FD8' }]}>
+          {currentScreen === 'splash' && (
+            <WelcomeSplashScreen onContinue={() => setCurrentScreen('login')} />
+          )}
+
           {currentScreen === 'login' && (
             <LoginScreen
               staffList={staffUsers}
               onLoginSuccess={handleLoginSuccess}
               onNavigateRegister={() => setCurrentScreen('register')}
+              onBackToSplash={() => setCurrentScreen('splash')}
             />
           )}
 
