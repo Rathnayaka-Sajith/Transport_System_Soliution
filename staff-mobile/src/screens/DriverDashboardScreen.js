@@ -166,25 +166,6 @@ export default function DriverDashboardScreen({ user }) {
             </TouchableOpacity>
           </View>
 
-          {/* Route Stops Timeline */}
-          <View style={styles.timelineCard}>
-            <Text style={styles.checklistTitle}>📍 Route Stops & Waypoints</Text>
-            {MOCK_DRIVER_TRIP.stops.map((stop, i) => (
-              <View key={i} style={styles.timelineRow}>
-                <Text style={styles.timelineDot}>
-                  {stop.status === 'DEPARTED' ? '🟢' : stop.status === 'CURRENT' ? '🟡' : '⚪'}
-                </Text>
-                <View style={styles.timelineInfo}>
-                  <Text style={styles.timelineName}>{stop.name}</Text>
-                  <Text style={styles.timelineStatus}>
-                    {stop.status === 'DEPARTED' ? 'Departed' : stop.status === 'CURRENT' ? 'Current Bus Stop' : 'Scheduled Halt'}
-                  </Text>
-                </View>
-                <Text style={styles.timelineTime}>{stop.time}</Text>
-              </View>
-            ))}
-          </View>
-
       {/* SOS Modal */}
       <Modal
         visible={sosModalVisible}
@@ -447,50 +428,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.3,
-  },
-
-  // Timeline
-  timelineCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 14,
-    shadowColor: '#000000',
-    shadowOpacity: 0.03,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  timelineDot: {
-    fontSize: 14,
-    width: 28,
-  },
-  timelineInfo: {
-    flex: 1,
-  },
-  timelineName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  timelineStatus: {
-    fontSize: 10,
-    color: '#64748b',
-    marginTop: 1,
-  },
-  timelineTime: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#006FD8',
   },
 
   // Modal
