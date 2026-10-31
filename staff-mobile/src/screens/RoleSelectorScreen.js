@@ -207,7 +207,6 @@ const styles = StyleSheet.create({
     color: '#006FD8',
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
 
   // Typography
@@ -216,7 +215,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0f172a',
     textAlign: 'center',
-    letterSpacing: -0.3,
   },
   questionTitle: {
     fontSize: 18,
@@ -284,7 +282,6 @@ const styles = StyleSheet.create({
   actionTag: {
     fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 0.8,
   },
   cardMainTitle: {
     fontSize: 17,

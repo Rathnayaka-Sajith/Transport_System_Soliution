@@ -201,7 +201,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     color: '#006FD8',
-    letterSpacing: 0.8,
     textAlign: 'center',
   },
   brandTagline: {
@@ -209,7 +208,6 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '500',
     marginTop: 3,
-    letterSpacing: 0.3,
     textAlign: 'center',
   },
 
@@ -221,7 +219,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     color: '#0f172a',
-    letterSpacing: -0.3,
   },
   welcomeSubtitle: {
     fontSize: 14,
@@ -299,7 +296,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
 
   // Footer

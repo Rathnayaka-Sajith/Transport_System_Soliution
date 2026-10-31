@@ -504,7 +504,6 @@ const styles = StyleSheet.create({
     color: '#0b1329',
     fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 0.5,
   },
   bannerTitle: {
     color: '#ffffff',
@@ -566,11 +565,10 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   statLabel: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748b',
     marginTop: 2,
-    textTransform: 'uppercase',
   },
 
   // Job Cards
@@ -631,10 +629,9 @@ const styles = StyleSheet.create({
     borderColor: '#edf2f7',
   },
   issueLabel: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748b',
-    letterSpacing: 0.5,
   },
   issueText: {
     fontSize: 13,
@@ -648,10 +645,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tasksHeader: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#64748b',
-    letterSpacing: 0.5,
     marginBottom: 8,
   },
   taskItem: {
@@ -893,10 +889,9 @@ const styles = StyleSheet.create({
     width: '47%',
   },
   recordLabel: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#94a3b8',
-    letterSpacing: 0.5,
   },
   recordVal: {
     fontSize: 13,
@@ -998,15 +993,13 @@ const styles = StyleSheet.create({
   },
   certHeaderSub: {
     color: '#10b981',
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 1,
   },
   certHeaderTitle: {
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 0.5,
     marginTop: 2,
   },
   certBody: {
@@ -1017,7 +1010,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     color: '#059669',
-    letterSpacing: 2,
     borderWidth: 2,
     borderColor: '#059669',
     paddingVertical: 4,

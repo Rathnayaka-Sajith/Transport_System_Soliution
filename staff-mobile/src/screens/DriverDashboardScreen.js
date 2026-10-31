@@ -431,7 +431,7 @@ export default function DriverDashboardScreen({ user }) {
 
           <View style={styles.navStatusPill}>
             <View style={styles.navPulseDot} />
-            <Text style={styles.navStatusPillText}>IN-TRANSIT • ROUTE 87</Text>
+            <Text style={styles.navStatusPillText}>In-Transit • Route 87</Text>
           </View>
 
           <TouchableOpacity
@@ -461,12 +461,12 @@ export default function DriverDashboardScreen({ user }) {
               />
               <Text style={styles.gpsStatusTitle}>
                 {gpsStatus === 'ACTIVE'
-                  ? 'LIVE MOBILE GPS ACTIVE'
+                  ? 'Live Mobile GPS Active'
                   : gpsStatus === 'ACQUIRING'
-                  ? 'ACQUIRING SATELLITE FIX...'
+                  ? 'Acquiring GPS fix...'
                   : gpsStatus === 'PERMISSION_DENIED'
-                  ? 'GPS PERMISSION REQUIRED'
-                  : 'GPS READY'}
+                  ? 'GPS Permission Required'
+                  : 'GPS Ready'}
               </Text>
             </View>
 
@@ -486,7 +486,7 @@ export default function DriverDashboardScreen({ user }) {
             <View style={styles.remainingDistCardPrimary}>
               <View style={styles.metricIconRow}>
                 <Ionicons name="location" size={15} color="#006FD8" />
-                <Text style={styles.distCardLabelPrimary}>REMAINING TO NEXT PICKUP</Text>
+                <Text style={styles.distCardLabelPrimary}>Remaining to Next Pickup</Text>
               </View>
               <View style={styles.distValueRow}>
                 <Text style={styles.distNumberBigPrimary}>
@@ -520,7 +520,7 @@ export default function DriverDashboardScreen({ user }) {
             <View style={styles.remainingDistCardSecondary}>
               <View style={styles.metricIconRow}>
                 <Ionicons name="flag" size={14} color="#475569" />
-                <Text style={styles.distCardLabelSecondary}>REMAINING TO END TRIP</Text>
+                <Text style={styles.distCardLabelSecondary}>Remaining to End Trip</Text>
               </View>
               <View style={styles.distValueRow}>
                 <Text style={styles.distNumberBigSecondary}>
@@ -702,7 +702,7 @@ export default function DriverDashboardScreen({ user }) {
                           : styles.stopStatusBadgeUpcomingText,
                       ]}
                     >
-                      {isPassed ? 'PASSED' : isActive ? 'NEXT STOP' : 'UPCOMING'}
+                      {isPassed ? 'Passed' : isActive ? 'Next Stop' : 'Upcoming'}
                     </Text>
                   </View>
                 </View>
@@ -933,7 +933,7 @@ export default function DriverDashboardScreen({ user }) {
                   <Feather name="user-check" size={18} color="#006FD8" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>ASSIGNED CONDUCTOR</Text>
+                  <Text style={styles.infoLabel}>Assigned Conductor</Text>
                   <Text style={styles.infoValueMain}>Nimal Silva</Text>
                   <Text style={styles.infoSubText}>ID: PNG-EMP-103 • Tel: +94 76 345 8821</Text>
                 </View>
@@ -945,7 +945,7 @@ export default function DriverDashboardScreen({ user }) {
                   <Feather name="users" size={18} color="#10B981" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>SEAT OCCUPANCY</Text>
+                  <Text style={styles.infoLabel}>Seat Occupancy</Text>
                   <Text style={styles.infoValueMain}>
                     38 / 40 Seats Filled <Text style={{ color: '#10B981', fontSize: 13 }}>(95% Full)</Text>
                   </Text>
@@ -959,7 +959,7 @@ export default function DriverDashboardScreen({ user }) {
                   <Feather name="check-circle" size={18} color="#059669" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>LATEST TEST DATE & INSPECTION</Text>
+                  <Text style={styles.infoLabel}>Latest Test Date & Inspection</Text>
                   <Text style={styles.infoValueMain}>28 Oct 2026</Text>
                   <Text style={styles.infoSubText}>
                     Passed NTC Roadworthiness, Dual-Air Brakes & Safety Audit
@@ -973,7 +973,7 @@ export default function DriverDashboardScreen({ user }) {
                   <Feather name="shield" size={18} color="#6366F1" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>FLEET REGISTRATION</Text>
+                  <Text style={styles.infoLabel}>Fleet Registration</Text>
                   <Text style={styles.infoValueMain}>Thambuththegama Central Depot</Text>
                   <Text style={styles.infoSubText}>Expressway Highway Permit #NTC-WP-8812</Text>
                 </View>
@@ -1021,8 +1021,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
     marginBottom: 6,
   },
   timeRow: {
@@ -1034,7 +1032,6 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: -1.5,
   },
   timeSecondsText: {
     fontSize: 18,
@@ -1061,7 +1058,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: -0.4,
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -1150,7 +1146,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
-    letterSpacing: 0.3,
   },
 
   // Modal: Assigned Bus Details
@@ -1227,10 +1222,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   infoLabel: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.6,
   },
   infoValueMain: {
     fontSize: 14,
@@ -1308,10 +1302,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   navStatusPillText: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#059669',
-    letterSpacing: 0.4,
   },
   openExternalMapsBtn: {
     flexDirection: 'row',
@@ -1373,9 +1366,8 @@ const styles = StyleSheet.create({
   },
   gpsStatusTitle: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: 0.5,
   },
   gpsBadge: {
     flexDirection: 'row',
@@ -1409,10 +1401,9 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   distCardLabelPrimary: {
-    fontSize: 9,
-    fontWeight: '900',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#006FD8',
-    letterSpacing: 0.5,
   },
   distValueRow: {
     flexDirection: 'row',
@@ -1423,7 +1414,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '900',
     color: '#006FD8',
-    letterSpacing: -0.5,
   },
   distKmUnitPrimary: {
     fontSize: 13,
@@ -1465,16 +1455,14 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   distCardLabelSecondary: {
-    fontSize: 9,
-    fontWeight: '900',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.5,
   },
   distNumberBigSecondary: {
     fontSize: 26,
     fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: -0.5,
   },
   distKmUnitSecondary: {
     fontSize: 13,
@@ -1587,7 +1575,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0.2,
   },
 
   // Trip Secondary Controls

@@ -653,7 +653,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   bannerTitle: {
     color: '#ffffff',
@@ -749,7 +748,6 @@ const styles = StyleSheet.create({
     color: '#38bdf8',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.8,
   },
   busGrid: {
     gap: 8,
@@ -1007,11 +1005,10 @@ const styles = StyleSheet.create({
     color: '#10b981',
   },
   cashStatLabel: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748b',
     marginTop: 2,
-    textTransform: 'uppercase',
   },
   btnIssueCash: {
     backgroundColor: '#046bd2',
@@ -1113,11 +1110,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   modalLabel: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#475569',
     marginBottom: 6,
-    letterSpacing: 0.5,
   },
   modalInput: {
     height: 44,

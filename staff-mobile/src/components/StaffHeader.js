@@ -39,7 +39,7 @@ export default function StaffHeader({ user, activeRole, onSwitchRole, onLogout }
 
         {/* Center: PNG Express Minimal Header */}
         <View style={styles.centerCol}>
-          <Text style={styles.centerBrand}>PNG EXPRESS</Text>
+          <Text style={styles.centerBrand}>PNG Express</Text>
         </View>
 
         {/* Right: Notification Mark Icon */}
@@ -225,10 +225,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   centerBrand: {
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#006FD8',
-    letterSpacing: 1.2,
   },
   bellWrapper: {
     width: 38,
@@ -307,7 +306,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
   },
   userEmpIdText: {
     fontSize: 12,
@@ -328,7 +326,6 @@ const styles = StyleSheet.create({
     color: '#006FD8',
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.3,
   },
 
   // Action Buttons in Modal
@@ -396,7 +393,6 @@ const styles = StyleSheet.create({
     color: '#006FD8',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   notifTimeAgo: {
     fontSize: 11,
