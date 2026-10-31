@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,7 +8,14 @@ import {
   Alert,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  mechanicStore,
+  getMonthlyInspectionStatus,
+  calculateDaysSinceTest,
+} from '../data/mechanicStore';
 import {
   MOCK_JOB_CARDS,
   MOCK_EMERGENCY_RESCUES,
@@ -17,16 +24,115 @@ import {
 } from '../data/mockDatabase';
 
 export default function MechanicDashboardScreen({ user }) {
-  const [activeTab, setActiveTab] = useState('jobs'); // 'jobs' | 'sos' | 'diagnostics'
+  // Main tabs: 'requests' (Driver Issue Requests) | 'monthly' (1x/Month Fleet Inspection) | 'jobs' | 'sos' | 'diagnostics'
+  const [activeTab, setActiveTab] = useState('requests');
+
+  // Shared store state
+  const [mechanicData, setMechanicData] = useState(mechanicStore.getState());
+  const [requestFilter, setRequestFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'SCHEDULED' | 'COMPLETED'
+
+  // Job Cards & Rescues legacy state
   const [jobCards, setJobCards] = useState(MOCK_JOB_CARDS);
   const [rescueCalls, setRescueCalls] = useState(MOCK_EMERGENCY_RESCUES);
   const [partsList, setPartsList] = useState(MOCK_PARTS_INVENTORY);
   const [searchPlate, setSearchPlate] = useState('NB-4592');
 
-  // Certificate Modal State
-  const [certModalVisible, setCertModalVisible] = useState(false);
-  const [certBusInfo, setCertBusInfo] = useState(null);
+  // Subscribe to real-time mechanicStore updates (Driver defect submissions & renewals)
+  useEffect(() => {
+    const unsub = mechanicStore.subscribe((newState) => {
+      setMechanicData({ ...newState });
+    });
+    return unsub;
+  }, []);
 
+  // -------------------------------------------------------------
+  // MODAL 1: SCHEDULE MAINTENANCE & GIVE TIME
+  // -------------------------------------------------------------
+  const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+  const [selectedRequestToSchedule, setSelectedRequestToSchedule] = useState(null);
+  const [scheduledTimeInput, setScheduledTimeInput] = useState('');
+  const [scheduleNotesInput, setScheduleNotesInput] = useState('');
+
+  const handleOpenScheduleModal = (req) => {
+    setSelectedRequestToSchedule(req);
+    setScheduledTimeInput(req.scheduledTime || 'Today, 08:30 PM (Post-Trip Depot Halt)');
+    setScheduleNotesInput(req.mechanicNotes || '');
+    setScheduleModalVisible(true);
+  };
+
+  const handleConfirmSchedule = () => {
+    if (!selectedRequestToSchedule) return;
+    if (!scheduledTimeInput.trim()) {
+      Alert.alert('Required', 'Please enter or select a maintenance time slot.');
+      return;
+    }
+
+    mechanicStore.scheduleInspection(selectedRequestToSchedule.id, {
+      mechanicName: user?.name || 'Sunil Perera (Lead Mechanic)',
+      scheduledTime: scheduledTimeInput.trim(),
+      notes: scheduleNotesInput.trim(),
+    });
+
+    setScheduleModalVisible(false);
+    Alert.alert(
+      'Maintenance Time Assigned',
+      `Inspection for bus ${selectedRequestToSchedule.busPlate} scheduled for "${scheduledTimeInput}". Driver has been notified on their dashboard.`
+    );
+  };
+
+  // -------------------------------------------------------------
+  // MODAL 2: INSPECT VEHICLE & RENEW FINAL TEST DATE
+  // -------------------------------------------------------------
+  const [renewModalVisible, setRenewModalVisible] = useState(false);
+  const [selectedBusForRenew, setSelectedBusForRenew] = useState(null);
+  const [associatedReqId, setAssociatedReqId] = useState(null);
+  const [newTestDateInput, setNewTestDateInput] = useState('2026-10-31');
+  const [inspectionNotesInput, setInspectionNotesInput] = useState(
+    'Passed NTC 40-point safety check, dual-air brakes, suspension & roadworthiness audit'
+  );
+  const [checklist, setChecklist] = useState({
+    brakes: true,
+    steering: true,
+    tires: true,
+    emissions: true,
+    emergency: true,
+  });
+
+  const handleOpenRenewalModal = (bus, reqId = null) => {
+    setSelectedBusForRenew(bus);
+    setAssociatedReqId(reqId);
+    setNewTestDateInput('2026-10-31');
+    setInspectionNotesInput(
+      'Passed NTC 40-point safety check, dual-air brakes, suspension & roadworthiness audit'
+    );
+    setChecklist({
+      brakes: true,
+      steering: true,
+      tires: true,
+      emissions: true,
+      emergency: true,
+    });
+    setRenewModalVisible(true);
+  };
+
+  const handleConfirmRenewal = () => {
+    if (!selectedBusForRenew) return;
+
+    mechanicStore.completeInspectionAndRenewDate(associatedReqId, {
+      busPlate: selectedBusForRenew.plate,
+      mechanicName: user?.name || 'Sunil Perera (Lead Mechanic)',
+      newTestDate: newTestDateInput.trim(),
+      inspectionNotes: inspectionNotesInput.trim(),
+    });
+
+    setRenewModalVisible(false);
+    Alert.alert(
+      '✓ Final Test Date Renewed',
+      `Bus ${selectedBusForRenew.plate} has been certified roadworthy until next month. New Final Test Date: ${newTestDateInput}. Synchronized with Driver's cockpit.`
+    );
+  };
+
+  // Job Cards toggle
   const toggleTask = (jobId, taskIndex) => {
     setJobCards((prev) =>
       prev.map((card) => {
@@ -43,25 +149,7 @@ export default function MechanicDashboardScreen({ user }) {
     );
   };
 
-  const handleOpenCertificateModal = (job) => {
-    setCertBusInfo(job);
-    setCertModalVisible(true);
-  };
-
-  const handleConfirmCertification = () => {
-    if (!certBusInfo) return;
-    setJobCards((prev) =>
-      prev.map((card) =>
-        card.jobId === certBusInfo.jobId ? { ...card, status: 'COMPLETED' } : card
-      )
-    );
-    setCertModalVisible(false);
-    Alert.alert(
-      '✓ Roadworthy Certified',
-      `Bus ${certBusInfo.busPlate} certified and released to Active Fleet schedule by ${user?.name || 'Lead Mechanic'}.`
-    );
-  };
-
+  // Emergency SOS deployment
   const handleDeployRescue = (rescueId, busPlate) => {
     setRescueCalls((prev) =>
       prev.map((r) =>
@@ -88,74 +176,528 @@ export default function MechanicDashboardScreen({ user }) {
     Alert.alert('Rescue Resolved', 'Emergency roadside incident resolved and logged.');
   };
 
+  // Computed metrics
+  const pendingRequestsCount = mechanicData.requests.filter((r) => r.status === 'PENDING').length;
   const activeJobCount = jobCards.filter((j) => j.status !== 'COMPLETED').length;
   const activeSosCount = rescueCalls.filter((r) => r.status !== 'RESOLVED').length;
+
+  // Monthly Fleet Inspection metrics
+  const totalFleetCount = mechanicData.fleet.length;
+  const validBusesCount = mechanicData.fleet.filter(
+    (b) => getMonthlyInspectionStatus(b.latestTestDate).status === 'VALID'
+  ).length;
+  const dueOrOverdueCount = totalFleetCount - validBusesCount;
+  const compliancePct = Math.round((validBusesCount / totalFleetCount) * 100);
+
+  // Filtered driver requests
+  const filteredRequests = mechanicData.requests.filter((r) => {
+    if (requestFilter === 'PENDING') return r.status === 'PENDING';
+    if (requestFilter === 'SCHEDULED') return r.status === 'SCHEDULED';
+    if (requestFilter === 'COMPLETED') return r.status === 'COMPLETED';
+    return true;
+  });
+
   const searchedRecord = MOCK_FLEET_RECORDS[searchPlate.trim().toUpperCase()];
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {/* Banner */}
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Workshop Operations Header */}
       <View style={styles.banner}>
         <View style={styles.bannerBadge}>
-          <Text style={styles.bannerBadgeText}>FLEET ENGINEERING & RESCUE</Text>
+          <Text style={styles.bannerBadgeText}>FLEET ENGINEERING & WORKSHOP</Text>
         </View>
         <Text style={styles.bannerTitle}>Workshop Operations</Text>
         <Text style={styles.bannerSub}>
-          Lead Mechanic: {user?.name || 'Staff'} • Central Workshop
+          Lead Mechanic: {user?.name || 'Sunil Perera'} • Central Depot Workshop
         </Text>
       </View>
 
-      {/* Sub Tabs */}
-      <View style={styles.tabBar}>
+      {/* TOP NOTIFICATION ALERT: When new pending requests exist from Drivers */}
+      {pendingRequestsCount > 0 && (
+        <TouchableOpacity
+          style={styles.notificationAlertBanner}
+          onPress={() => {
+            setActiveTab('requests');
+            setRequestFilter('PENDING');
+          }}
+          activeOpacity={0.85}
+        >
+          <View style={styles.bellIconCircle}>
+            <Ionicons name="notifications" size={18} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.notifAlertTitle}>
+              {pendingRequestsCount} New Vehicle Defect Report{pendingRequestsCount > 1 ? 's' : ''}!
+            </Text>
+            <Text style={styles.notifAlertSub}>
+              Driver reported issue awaiting mechanic pickup & time schedule.
+            </Text>
+          </View>
+          <View style={styles.notifAlertPill}>
+            <Text style={styles.notifAlertPillText}>View ➔</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Main Navigation Sub Tabs */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabBarScroll}
+        style={styles.tabBarWrapper}
+      >
+        {/* Tab 1: Driver Requests */}
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'requests' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('requests')}
+        >
+          <Ionicons
+            name="chatbubble-ellipses"
+            size={15}
+            color={activeTab === 'requests' ? '#006FD8' : '#64748B'}
+          />
+          <Text style={[styles.tabBtnText, activeTab === 'requests' && styles.tabBtnTextActive]}>
+            Driver Requests
+          </Text>
+          {pendingRequestsCount > 0 && (
+            <View style={styles.tabBadgeRed}>
+              <Text style={styles.tabBadgeRedText}>{pendingRequestsCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Tab 2: Monthly Fleet Inspections */}
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'monthly' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('monthly')}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={15}
+            color={activeTab === 'monthly' ? '#006FD8' : '#64748B'}
+          />
+          <Text style={[styles.tabBtnText, activeTab === 'monthly' && styles.tabBtnTextActive]}>
+            Monthly Inspections
+          </Text>
+          {dueOrOverdueCount > 0 && (
+            <View style={styles.tabBadgeAmber}>
+              <Text style={styles.tabBadgeAmberText}>{dueOrOverdueCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Tab 3: Workshop Job Cards */}
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === 'jobs' && styles.tabBtnActive]}
           onPress={() => setActiveTab('jobs')}
         >
+          <Ionicons
+            name="construct-outline"
+            size={15}
+            color={activeTab === 'jobs' ? '#006FD8' : '#64748B'}
+          />
           <Text style={[styles.tabBtnText, activeTab === 'jobs' && styles.tabBtnTextActive]}>
-            🔧 Job Cards ({activeJobCount})
+            Job Cards ({activeJobCount})
           </Text>
         </TouchableOpacity>
 
+        {/* Tab 4: SOS Highway Rescues */}
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === 'sos' && styles.tabBtnActive]}
           onPress={() => setActiveTab('sos')}
         >
+          <Ionicons
+            name="warning-outline"
+            size={15}
+            color={activeTab === 'sos' ? '#006FD8' : '#64748B'}
+          />
           <Text style={[styles.tabBtnText, activeTab === 'sos' && styles.tabBtnTextActive]}>
-            🚨 SOS Rescues ({activeSosCount})
+            SOS Rescues ({activeSosCount})
           </Text>
         </TouchableOpacity>
 
+        {/* Tab 5: Fleet Diagnostics */}
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === 'diagnostics' && styles.tabBtnActive]}
           onPress={() => setActiveTab('diagnostics')}
         >
+          <Ionicons
+            name="speedometer-outline"
+            size={15}
+            color={activeTab === 'diagnostics' ? '#006FD8' : '#64748B'}
+          />
           <Text style={[styles.tabBtnText, activeTab === 'diagnostics' && styles.tabBtnTextActive]}>
-            📦 Fleet Diagnostics
+            Diagnostics & Parts
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
-      {/* TAB 1: JOB CARDS */}
-      {activeTab === 'jobs' && (
-        <>
-          {/* Fleet Stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={[styles.statVal, { color: '#046bd2' }]}>138</Text>
-              <Text style={styles.statLabel}>Active Fleet</Text>
+      {/* ============================================================= */}
+      {/* TAB 1: DRIVER DEFECT REQUESTS (NOTIFICATIONS & SCHEDULING)   */}
+      {/* ============================================================= */}
+      {activeTab === 'requests' && (
+        <View style={{ width: '100%' }}>
+          {/* Section Description */}
+          <View style={styles.sectionHeaderCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="chatbubbles" size={18} color="#006FD8" />
+              <Text style={styles.sectionHeaderTitle}>Driver Vehicle Defect Requests</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statVal, { color: '#f59e0b' }]}>{activeJobCount}</Text>
-              <Text style={styles.statLabel}>In Service Bay</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statVal, { color: '#10b981' }]}>100%</Text>
-              <Text style={styles.statLabel}>Safety Score</Text>
+            <Text style={styles.sectionHeaderSub}>
+              Drivers report defects directly from their vehicle cockpit. Mechanics claim requests, assign inspection times, and renew test dates.
+            </Text>
+
+            {/* Filter Pills */}
+            <View style={styles.filterChipsRow}>
+              {[
+                { id: 'ALL', label: `All (${mechanicData.requests.length})` },
+                { id: 'PENDING', label: `Pending Pickup (${pendingRequestsCount})` },
+                {
+                  id: 'SCHEDULED',
+                  label: `Scheduled (${
+                    mechanicData.requests.filter((r) => r.status === 'SCHEDULED').length
+                  })`,
+                },
+                {
+                  id: 'COMPLETED',
+                  label: `Completed (${
+                    mechanicData.requests.filter((r) => r.status === 'COMPLETED').length
+                  })`,
+                },
+              ].map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.filterChipBtn, requestFilter === f.id && styles.filterChipBtnActive]}
+                  onPress={() => setRequestFilter(f.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      requestFilter === f.id && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
+          {/* List of Requests */}
+          {filteredRequests.map((req) => {
+            const isPending = req.status === 'PENDING';
+            const isScheduled = req.status === 'SCHEDULED';
+            const isCompleted = req.status === 'COMPLETED';
+            const busInfo = mechanicStore.getBusRecord(req.busPlate);
+
+            return (
+              <View
+                key={req.id}
+                style={[
+                  styles.driverRequestCard,
+                  isPending && styles.driverRequestCardPending,
+                  isScheduled && styles.driverRequestCardScheduled,
+                  isCompleted && styles.driverRequestCardCompleted,
+                ]}
+              >
+                {/* Top Row: Bus Plate & Status Badge */}
+                <View style={styles.reqTopRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={styles.busPlateBadge}>
+                      <Ionicons name="bus" size={15} color="#006FD8" />
+                      <Text style={styles.busPlateText}>{req.busPlate}</Text>
+                    </View>
+                    <Text style={styles.reqModelText}>{busInfo.model}</Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.reqStatusBadge,
+                      isPending && styles.reqStatusBadgePending,
+                      isScheduled && styles.reqStatusBadgeScheduled,
+                      isCompleted && styles.reqStatusBadgeCompleted,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.reqStatusBadgeText,
+                        isPending && styles.reqStatusBadgeTextPending,
+                        isScheduled && styles.reqStatusBadgeTextScheduled,
+                        isCompleted && styles.reqStatusBadgeTextCompleted,
+                      ]}
+                    >
+                      {isPending ? '⏳ Awaiting Pickup' : isScheduled ? '📅 Scheduled' : '✓ Completed'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Driver Info & Time */}
+                <View style={styles.driverInfoRow}>
+                  <Feather name="user" size={13} color="#64748B" />
+                  <Text style={styles.driverInfoText}>
+                    Reported by: <Text style={{ fontWeight: '700' }}>{req.driverName}</Text> • {req.reportedAt}
+                  </Text>
+                </View>
+
+                {/* Reported Issue Content */}
+                <View style={styles.reqIssueBox}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={styles.reqIssueLabel}>REPORTED DEFECT:</Text>
+                    <View
+                      style={[
+                        styles.urgencyTag,
+                        req.urgency === 'HIGH' && { backgroundColor: '#FEE2E2' },
+                        req.urgency === 'URGENT' && { backgroundColor: '#FEE2E2' },
+                        req.urgency === 'MEDIUM' && { backgroundColor: '#FEF3C7' },
+                        req.urgency === 'LOW' && { backgroundColor: '#F1F5F9' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.urgencyTagText,
+                          req.urgency === 'HIGH' && { color: '#DC2626' },
+                          req.urgency === 'URGENT' && { color: '#991B1B' },
+                          req.urgency === 'MEDIUM' && { color: '#D97706' },
+                          req.urgency === 'LOW' && { color: '#64748B' },
+                        ]}
+                      >
+                        {req.urgency} PRIORITY
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.reqIssueText}>"{req.issue}"</Text>
+                </View>
+
+                {/* Scheduled Time Banner (If scheduled) */}
+                {isScheduled && (
+                  <View style={styles.scheduledInfoBanner}>
+                    <Ionicons name="time" size={16} color="#006FD8" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.scheduledInfoTitle}>
+                        Inspection Time: {req.scheduledTime}
+                      </Text>
+                      <Text style={styles.scheduledInfoSub}>
+                        Assigned Mechanic: {req.assignedMechanic}
+                        {req.mechanicNotes ? ` • Note: ${req.mechanicNotes}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Completed Details */}
+                {isCompleted && (
+                  <View style={styles.completedInfoBanner}>
+                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.completedInfoTitle}>
+                        Inspection Completed & Final Test Date Renewed!
+                      </Text>
+                      <Text style={styles.completedInfoSub}>
+                        Latest Test Date: {busInfo.latestTestDate} • Inspected by {req.assignedMechanic}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* ACTION BUTTONS BASED ON STATE */}
+                {isPending && (
+                  <TouchableOpacity
+                    style={styles.btnClaimRequest}
+                    onPress={() => handleOpenScheduleModal(req)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="construct" size={16} color="#FFFFFF" />
+                    <Text style={styles.btnClaimRequestText}>
+                      Claim Request & Give Maintenance Time ➔
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {isScheduled && (
+                  <View style={styles.actionRowScheduled}>
+                    <TouchableOpacity
+                      style={styles.btnRescheduleSmall}
+                      onPress={() => handleOpenScheduleModal(req)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="clock" size={14} color="#006FD8" />
+                      <Text style={styles.btnRescheduleSmallText}>Adjust Time</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.btnInspectAndRenew}
+                      onPress={() => handleOpenRenewalModal(busInfo, req.id)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
+                      <Text style={styles.btnInspectAndRenewText}>
+                        Complete Check & Renew Test Date ➔
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* ============================================================= */}
+      {/* TAB 2: MONTHLY FLEET INSPECTIONS (1 TIME PER MONTH PER BUS)    */}
+      {/* ============================================================= */}
+      {activeTab === 'monthly' && (
+        <View style={{ width: '100%' }}>
+          {/* Monthly Regulation Header Card */}
+          <View style={styles.monthlySummaryCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="shield-checkmark" size={20} color="#006FD8" />
+              <Text style={styles.monthlySummaryTitle}>Monthly Mandatory Fleet Inspections</Text>
+            </View>
+            <Text style={styles.monthlySummaryNotice}>
+              National Transport Commission (NTC) Safety Mandate: All commercial passenger express buses must undergo comprehensive roadworthiness inspection once every 30 days.
+            </Text>
+
+            {/* Metrics Grid */}
+            <View style={styles.monthlyMetricsRow}>
+              <View style={styles.monthlyMetricBox}>
+                <Text style={[styles.monthlyMetricNum, { color: '#006FD8' }]}>
+                  {totalFleetCount}
+                </Text>
+                <Text style={styles.monthlyMetricLabel}>Total Fleet</Text>
+              </View>
+
+              <View style={styles.monthlyMetricBox}>
+                <Text style={[styles.monthlyMetricNum, { color: '#059669' }]}>
+                  {validBusesCount}
+                </Text>
+                <Text style={styles.monthlyMetricLabel}>Valid This Month</Text>
+              </View>
+
+              <View style={styles.monthlyMetricBox}>
+                <Text
+                  style={[
+                    styles.monthlyMetricNum,
+                    { color: dueOrOverdueCount > 0 ? '#DC2626' : '#059669' },
+                  ]}
+                >
+                  {dueOrOverdueCount}
+                </Text>
+                <Text style={styles.monthlyMetricLabel}>Inspection Due</Text>
+              </View>
+
+              <View style={styles.monthlyMetricBox}>
+                <Text style={[styles.monthlyMetricNum, { color: '#6366F1' }]}>
+                  {compliancePct}%
+                </Text>
+                <Text style={styles.monthlyMetricLabel}>Compliance</Text>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={styles.complianceBarTrack}>
+              <View style={[styles.complianceBarFill, { width: `${compliancePct}%` }]} />
+            </View>
+          </View>
+
+          {/* List of All Fleet Buses and Their Monthly Test Status */}
+          <Text style={styles.fleetListHeaderTitle}>Fleet Buses Monthly Inspection Status:</Text>
+
+          {mechanicData.fleet.map((bus) => {
+            const monthlyStatus = getMonthlyInspectionStatus(bus.latestTestDate);
+            const isValid = monthlyStatus.status === 'VALID';
+            const isDueSoon = monthlyStatus.status === 'DUE_SOON';
+            const isOverdue = monthlyStatus.status === 'OVERDUE';
+
+            return (
+              <View key={bus.plate} style={styles.fleetBusCard}>
+                <View style={styles.fleetCardTop}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={styles.fleetBusPlate}>{bus.plate}</Text>
+                      <View
+                        style={[
+                          styles.monthlyStatusBadge,
+                          {
+                            backgroundColor: monthlyStatus.badgeBg,
+                            borderColor: monthlyStatus.badgeBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.monthlyStatusBadgeText, { color: monthlyStatus.color }]}>
+                          {monthlyStatus.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.fleetBusModel}>{bus.model} • {bus.year}</Text>
+                  </View>
+                </View>
+
+                {/* Depot & Route */}
+                <View style={styles.fleetRouteRow}>
+                  <Feather name="map-pin" size={13} color="#64748B" />
+                  <Text style={styles.fleetRouteText}>
+                    {bus.depot} • <Text style={{ color: '#0F172A', fontWeight: '600' }}>{bus.assignedRoute}</Text>
+                  </Text>
+                </View>
+
+                {/* Test Dates & Certificate Details */}
+                <View style={styles.testDateBox}>
+                  <View style={styles.testDateItem}>
+                    <Text style={styles.testDateLabel}>Latest Test Date:</Text>
+                    <Text style={styles.testDateValue}>{bus.latestTestDate}</Text>
+                    <Text style={styles.testDateSub}>
+                      ({monthlyStatus.daysAgo} days ago)
+                    </Text>
+                  </View>
+
+                  <View style={styles.testDateItem}>
+                    <Text style={styles.testDateLabel}>Next Check Due:</Text>
+                    <Text
+                      style={[
+                        styles.testDateValue,
+                        isOverdue && { color: '#DC2626' },
+                        isDueSoon && { color: '#D97706' },
+                        isValid && { color: '#059669' },
+                      ]}
+                    >
+                      {isValid ? `In ${monthlyStatus.daysRemaining} days` : isDueSoon ? `Due soon!` : 'OVERDUE!'}
+                    </Text>
+                    <Text style={styles.testDateSub}>30-Day Rule</Text>
+                  </View>
+                </View>
+
+                {/* Audit Certificate Information */}
+                <Text style={styles.certAuditNotes}>
+                  Cert: <Text style={{ fontWeight: '700' }}>{bus.inspectionCertNo}</Text> • {bus.inspectionNotes}
+                </Text>
+
+                {/* Perform Inspection & Renew Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.btnRenewTestDate,
+                    isOverdue && styles.btnRenewTestDateOverdue,
+                  ]}
+                  onPress={() => handleOpenRenewalModal(bus)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkbox-outline" size={17} color="#FFFFFF" />
+                  <Text style={styles.btnRenewTestDateText}>
+                    Perform Monthly Inspection & Renew Test Date ➔
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* ============================================================= */}
+      {/* TAB 3: WORKSHOP JOB CARDS (OVERHAUL CHECKLIST)                */}
+      {/* ============================================================= */}
+      {activeTab === 'jobs' && (
+        <View style={{ width: '100%' }}>
           {jobCards.map((job) => {
-            const allTasksDone = job.tasks.every((t) => t.done);
             const isCompleted = job.status === 'COMPLETED';
 
             return (
@@ -219,64 +761,46 @@ export default function MechanicDashboardScreen({ user }) {
                     </Text>
                   </TouchableOpacity>
                 ))}
-
-                {/* Action Button */}
-                {!isCompleted ? (
-                  <TouchableOpacity
-                    style={[styles.btnCertify, !allTasksDone && styles.btnCertifyDisabled]}
-                    onPress={() => handleOpenCertificateModal(job)}
-                  >
-                    <Text style={styles.btnCertifyText}>
-                      ✓ View & Sign Off Roadworthy Certificate
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.completedTag}>
-                    <Text style={styles.completedTagText}>✓ Bus Certified Roadworthy & Dispatched</Text>
-                  </View>
-                )}
               </View>
             );
           })}
-        </>
+        </View>
       )}
 
-      {/* TAB 2: SOS RESCUES */}
+      {/* ============================================================= */}
+      {/* TAB 4: SOS RESCUES                                            */}
+      {/* ============================================================= */}
       {activeTab === 'sos' && (
-        <View style={styles.sosCard}>
-          <Text style={styles.sectionTitle}>🚨 Emergency Roadside Distress Calls</Text>
-          <Text style={styles.sectionSub}>
-            Real-time breakdown alerts broadcasted by express drivers en route.
-          </Text>
-
+        <View style={{ width: '100%' }}>
           {rescueCalls.map((sos) => {
             const isDispatched = sos.status === 'DISPATCHED';
             const isResolved = sos.status === 'RESOLVED';
 
             return (
-              <View key={sos.rescueId} style={[styles.sosItem, isResolved && styles.sosItemResolved]}>
+              <View
+                key={sos.rescueId}
+                style={[
+                  styles.sosCard,
+                  isDispatched && styles.sosCardDispatched,
+                  isResolved && styles.sosCardResolved,
+                ]}
+              >
                 <View style={styles.sosTopRow}>
-                  <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.sosPlateText}>{sos.busPlate}</Text>
-                      <View style={styles.sosRouteBadge}>
-                        <Text style={styles.sosRouteText}>{sos.route}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.sosTimeText}>{sos.timeReported} • {sos.location}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={styles.sosPulseDot} />
+                    <Text style={styles.sosPlate}>{sos.busPlate}</Text>
                   </View>
-
                   <View
                     style={[
                       styles.sosStatusBadge,
-                      isDispatched && { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
-                      isResolved && { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' },
+                      isDispatched && { backgroundColor: '#eff6ff' },
+                      isResolved && { backgroundColor: '#f0fdf4' },
                     ]}
                   >
                     <Text
                       style={[
                         styles.sosStatusText,
-                        isDispatched && { color: '#046bd2' },
+                        isDispatched && { color: '#006FD8' },
                         isResolved && { color: '#059669' },
                       ]}
                     >
@@ -285,22 +809,15 @@ export default function MechanicDashboardScreen({ user }) {
                   </View>
                 </View>
 
-                <View style={styles.sosIssueBox}>
-                  <Text style={styles.sosIssueText}>{sos.issueDescription}</Text>
-                  <Text style={styles.sosDriverInfo}>
-                    Driver: {sos.driverName} • {sos.passengersOnboard} Passengers Onboard
-                  </Text>
+                <Text style={styles.sosModel}>{sos.busModel}</Text>
+                <Text style={styles.sosDriver}>Driver: {sos.driverName} • Tel: {sos.driverPhone}</Text>
+                <Text style={styles.sosLocation}>📍 {sos.locationName} (GPS: {sos.coordinates})</Text>
+
+                <View style={styles.breakdownNotice}>
+                  <Text style={styles.breakdownLabel}>BREAKDOWN DEFECT:</Text>
+                  <Text style={styles.breakdownText}>{sos.breakdownType}</Text>
                 </View>
 
-                {isDispatched && (
-                  <View style={styles.dispatchPill}>
-                    <Text style={styles.dispatchPillText}>
-                      🚐 {sos.assignedVan} en route (ETA: {sos.etaMinutes} mins)
-                    </Text>
-                  </View>
-                )}
-
-                {/* Action Buttons */}
                 {!isDispatched && !isResolved && (
                   <TouchableOpacity
                     style={styles.btnDeployVan}
@@ -328,10 +845,11 @@ export default function MechanicDashboardScreen({ user }) {
         </View>
       )}
 
-      {/* TAB 3: DIAGNOSTICS & PARTS */}
+      {/* ============================================================= */}
+      {/* TAB 5: DIAGNOSTICS & PARTS                                    */}
+      {/* ============================================================= */}
       {activeTab === 'diagnostics' && (
-        <>
-          {/* Coach Telematics Search */}
+        <View style={{ width: '100%' }}>
           <View style={styles.searchCard}>
             <Text style={styles.sectionTitle}>🔍 Bus Fleet Health Diagnostic Lookup</Text>
             <Text style={styles.sectionSub}>Enter coach registration plate to view real-time diagnostics:</Text>
@@ -387,95 +905,245 @@ export default function MechanicDashboardScreen({ user }) {
             )}
           </View>
 
-          {/* Workshop Spare Parts */}
+          {/* Parts inventory */}
           <View style={styles.partsCard}>
             <Text style={styles.sectionTitle}>📦 Workshop Spare Parts Inventory</Text>
-            <Text style={styles.sectionSub}>Critical high-demand coach spare parts stock:</Text>
-
             {partsList.map((part) => (
               <View key={part.id} style={styles.partItem}>
                 <View style={styles.partLeft}>
                   <Text style={styles.partName}>{part.name}</Text>
                   <Text style={styles.partCode}>SKU: {part.code} • Unit: {part.unit}</Text>
                 </View>
-
                 <View style={styles.partRight}>
                   <Text style={styles.partStock}>{part.inStock}</Text>
-                  <View
-                    style={[
-                      styles.stockPill,
-                      part.status === 'OK' && { backgroundColor: '#ecfdf5' },
-                      part.status === 'LOW' && { backgroundColor: '#fffbeb' },
-                      part.status === 'OUT_OF_STOCK' && { backgroundColor: '#fef2f2' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.stockPillText,
-                        part.status === 'OK' && { color: '#059669' },
-                        part.status === 'LOW' && { color: '#d97706' },
-                        part.status === 'OUT_OF_STOCK' && { color: '#dc2626' },
-                      ]}
-                    >
-                      {part.status}
-                    </Text>
-                  </View>
+                  <Text style={styles.partStockLabel}>In Stock</Text>
                 </View>
               </View>
             ))}
           </View>
-        </>
+        </View>
       )}
 
-      {/* Roadworthy Certificate Modal */}
+      {/* ============================================================= */}
+      {/* MODAL 1: CLAIM REQUEST & ASSIGN INSPECTION TIME               */}
+      {/* ============================================================= */}
       <Modal
-        visible={certModalVisible}
+        visible={scheduleModalVisible}
         transparent
-        animationType="slide"
-        onRequestClose={() => setCertModalVisible(false)}
+        animationType="fade"
+        onRequestClose={() => setScheduleModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.certBox}>
-            <View style={styles.certHeader}>
-              <Text style={styles.certHeaderSub}>NATIONAL TRANSPORT COMMISSION • SRI LANKA</Text>
-              <Text style={styles.certHeaderTitle}>EXPRESSWAY ROADWORTHY CERTIFICATE</Text>
-            </View>
-
-            <View style={styles.certBody}>
-              <Text style={styles.certStamp}>APPROVED ✓</Text>
-              <Text style={styles.certBusText}>COACH: {certBusInfo?.busPlate}</Text>
-              <Text style={styles.certModelText}>{certBusInfo?.busModel}</Text>
-
-              <View style={styles.certDetailsList}>
-                <Text style={styles.certDetailLine}>• Hydraulic & Air Brake Deceleration: PASSED</Text>
-                <Text style={styles.certDetailLine}>• Dual Climate Air Conditioning: PASSED</Text>
-                <Text style={styles.certDetailLine}>• Expressway Speed Limiter Calibration: 100 km/h</Text>
-                <Text style={styles.certDetailLine}>• Emergency Exit System & Safety Glass: VERIFIED</Text>
-              </View>
-
-              <View style={styles.certSignBox}>
-                <Text style={styles.certSignLabel}>CERTIFIED BY LEAD FLEET MECHANIC:</Text>
-                <Text style={styles.certSignName}>{user?.name || 'Lead Fleet Mechanic'}</Text>
-                <Text style={styles.certSignDepot}>Workshop: {user?.mechanicDetails?.workshop || 'Central Fleet Depot'}</Text>
-                <Text style={styles.certSignDate}>Date: {new Date().toLocaleDateString()}</Text>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setScheduleModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalIconCircleBlue}>
+                  <Ionicons name="time" size={18} color="#006FD8" />
+                </View>
+                <View>
+                  <Text style={styles.modalHeaderTitle}>Schedule Maintenance Time</Text>
+                  <Text style={styles.modalHeaderSub}>
+                    Bus {selectedRequestToSchedule?.busPlate} • Driver {selectedRequestToSchedule?.driverName}
+                  </Text>
+                </View>
               </View>
 
               <TouchableOpacity
-                style={styles.btnSignCertificate}
-                onPress={handleConfirmCertification}
+                onPress={() => setScheduleModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.btnSignCertificateText}>✓ Sign & Release Bus to Active Fleet</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.btnCancelCert}
-                onPress={() => setCertModalVisible(false)}
-              >
-                <Text style={styles.btnCancelCertText}>Cancel</Text>
+                <Feather name="x" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Reported Defect Summary */}
+              <View style={styles.modalIssueSummaryBox}>
+                <Text style={styles.modalIssueSummaryLabel}>DRIVER'S REPORTED DEFECT:</Text>
+                <Text style={styles.modalIssueSummaryText}>"{selectedRequestToSchedule?.issue}"</Text>
+              </View>
+
+              {/* Quick Time Preset Buttons */}
+              <Text style={styles.inputSectionLabel}>Select Maintenance Time Slot:</Text>
+              <View style={styles.timePresetsGrid}>
+                {[
+                  'Today, 08:30 PM (Post-Trip Depot Halt)',
+                  'Today, 10:30 PM (After Jaffna Return)',
+                  'Tomorrow, 06:30 AM (Morning Pre-Trip)',
+                  'Tomorrow, 01:00 PM (Midday Service Bay)',
+                ].map((slot) => (
+                  <TouchableOpacity
+                    key={slot}
+                    style={[
+                      styles.timePresetBtn,
+                      scheduledTimeInput === slot && styles.timePresetBtnSelected,
+                    ]}
+                    onPress={() => setScheduledTimeInput(slot)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="alarm-outline"
+                      size={14}
+                      color={scheduledTimeInput === slot ? '#006FD8' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.timePresetBtnText,
+                        scheduledTimeInput === slot && styles.timePresetBtnTextSelected,
+                      ]}
+                    >
+                      {slot}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Custom Time Slot Input */}
+              <Text style={styles.inputSectionLabel}>Or Enter Custom Schedule Time:</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="E.g. Today 09:15 PM, Bay 2"
+                placeholderTextColor="#94A3B8"
+                value={scheduledTimeInput}
+                onChangeText={setScheduledTimeInput}
+              />
+
+              {/* Workshop Notes */}
+              <Text style={styles.inputSectionLabel}>Technician Notes for Driver:</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="E.g., Park at Bay 2 after arrival, technician assigned..."
+                placeholderTextColor="#94A3B8"
+                value={scheduleNotesInput}
+                onChangeText={setScheduleNotesInput}
+              />
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.btnConfirmModalAction}
+              onPress={handleConfirmSchedule}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-done" size={17} color="#FFFFFF" />
+              <Text style={styles.btnConfirmModalActionText}>
+                Confirm & Send Scheduled Time to Driver
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ============================================================= */}
+      {/* MODAL 2: ROADWORTHINESS CHECK & RENEW FINAL TEST DATE         */}
+      {/* ============================================================= */}
+      <Modal
+        visible={renewModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenewModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setRenewModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalIconCircleGreen}>
+                  <Ionicons name="shield-checkmark" size={18} color="#059669" />
+                </View>
+                <View>
+                  <Text style={styles.modalHeaderTitle}>Renew Final Test Date</Text>
+                  <Text style={styles.modalHeaderSub}>
+                    Bus {selectedBusForRenew?.plate} • {selectedBusForRenew?.model}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setRenewModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Mandatory Checklist Items */}
+              <Text style={styles.inputSectionLabel}>NTC 5-Point Safety & Roadworthy Inspection:</Text>
+              {[
+                { key: 'brakes', label: 'Dual-Air Brakes & Retarder Stopping Performance' },
+                { key: 'steering', label: 'Pneumatic Air Suspension & Steering Linkage' },
+                { key: 'tires', label: 'Heavy Highway Radial Tires Tread Depth (>4.5mm)' },
+                { key: 'emissions', label: 'Engine Smoke Emissions, Oil & Coolant Pressure' },
+                { key: 'emergency', label: 'Passenger Emergency Doors, Hammer & Fire Safety' },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={styles.modalCheckItem}
+                  onPress={() =>
+                    setChecklist((c) => ({ ...c, [item.key]: !c[item.key] }))
+                  }
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.modalCheckbox,
+                      checklist[item.key] && styles.modalCheckboxChecked,
+                    ]}
+                  >
+                    <Text style={styles.modalCheckTick}>{checklist[item.key] ? '✓' : ''}</Text>
+                  </View>
+                  <Text style={styles.modalCheckItemText}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* Final Test Date to Renew */}
+              <Text style={styles.inputSectionLabel}>Renewed Final Test Date (YYYY-MM-DD):</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="2026-10-31"
+                placeholderTextColor="#94A3B8"
+                value={newTestDateInput}
+                onChangeText={setNewTestDateInput}
+              />
+
+              {/* Inspector Certification Notes */}
+              <Text style={styles.inputSectionLabel}>Inspection Audit Remarks:</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="Passed full NTC roadworthiness, brake test & monthly check"
+                placeholderTextColor="#94A3B8"
+                value={inspectionNotesInput}
+                onChangeText={setInspectionNotesInput}
+              />
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.btnConfirmRenewal}
+              onPress={handleConfirmRenewal}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="ribbon" size={18} color="#FFFFFF" />
+              <Text style={styles.btnConfirmRenewalText}>
+                ✓ Certify Roadworthy & Renew Test Date
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </ScrollView>
   );
@@ -483,136 +1151,616 @@ export default function MechanicDashboardScreen({ user }) {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 40,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    flexGrow: 1,
+    ...(Platform.OS === 'web'
+      ? {
+          maxWidth: 540,
+          width: '100%',
+          alignSelf: 'center',
+        }
+      : {}),
   },
+
+  // Workshop Banner
   banner: {
-    backgroundColor: '#0b1329',
-    borderRadius: 14,
-    padding: 18,
+    width: '100%',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
   },
   bannerBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#1E293B',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
     marginBottom: 6,
   },
   bannerBadgeText: {
-    color: '#0b1329',
+    color: '#38BDF8',
     fontSize: 10,
-    fontWeight: '900',
-  },
-  bannerTitle: {
-    color: '#ffffff',
-    fontSize: 20,
     fontWeight: '800',
   },
-  bannerSub: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginTop: 4,
-  },
-
-  // Tabs
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabBtnActive: {
-    backgroundColor: '#f59e0b',
-  },
-  tabBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  tabBtnTextActive: {
-    color: '#0f172a',
-    fontWeight: '900',
-  },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  statVal: {
+  bannerTitle: {
+    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '900',
   },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
+  bannerSub: {
+    color: '#94A3B8',
+    fontSize: 11,
     marginTop: 2,
+    fontWeight: '600',
   },
 
-  // Job Cards
-  jobCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  // Top Notification Alert Banner
+  notificationAlertBanner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  bellIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifAlertTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  notifAlertSub: {
+    fontSize: 11,
+    color: '#7F1D1D',
+    marginTop: 1,
+  },
+  notifAlertPill: {
+    backgroundColor: '#DC2626',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  notifAlertPillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  // Tab Bar Scroll
+  tabBarWrapper: {
+    width: '100%',
     marginBottom: 14,
   },
+  tabBarScroll: {
+    gap: 8,
+    paddingRight: 10,
+  },
+  tabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1.2,
+    borderColor: '#E2E8F0',
+  },
+  tabBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#006FD8',
+  },
+  tabBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  tabBtnTextActive: {
+    color: '#006FD8',
+  },
+  tabBadgeRed: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  tabBadgeRedText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  tabBadgeAmber: {
+    backgroundColor: '#D97706',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  tabBadgeAmberText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  // Section Header Card
+  sectionHeaderCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  sectionHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sectionHeaderSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+    lineHeight: 15,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  filterChipBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  filterChipBtnActive: {
+    backgroundColor: '#006FD8',
+    borderColor: '#006FD8',
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // Driver Request Cards
+  driverRequestCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  driverRequestCardPending: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFDF5',
+  },
+  driverRequestCardScheduled: {
+    borderColor: '#BFDBFE',
+    backgroundColor: '#FAFCFF',
+  },
+  driverRequestCardCompleted: {
+    borderColor: '#BBF7D0',
+    backgroundColor: '#F7FEFA',
+  },
+  reqTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  busPlateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  busPlateText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  reqModelText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  reqStatusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  reqStatusBadgePending: {
+    backgroundColor: '#FEF3C7',
+  },
+  reqStatusBadgeScheduled: {
+    backgroundColor: '#EFF6FF',
+  },
+  reqStatusBadgeCompleted: {
+    backgroundColor: '#ECFDF5',
+  },
+  reqStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  reqStatusBadgeTextPending: {
+    color: '#B45309',
+  },
+  reqStatusBadgeTextScheduled: {
+    color: '#006FD8',
+  },
+  reqStatusBadgeTextCompleted: {
+    color: '#059669',
+  },
+  driverInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  driverInfoText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  reqIssueBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 10,
+  },
+  reqIssueLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  urgencyTag: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  urgencyTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  reqIssueText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  scheduledInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 10,
+  },
+  scheduledInfoTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  scheduledInfoSub: {
+    fontSize: 11,
+    color: '#1E40AF',
+    marginTop: 2,
+  },
+  completedInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginBottom: 6,
+  },
+  completedInfoTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  completedInfoSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+  },
+  btnClaimRequest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  btnClaimRequestText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  actionRowScheduled: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  btnRescheduleSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  btnRescheduleSmallText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#006FD8',
+  },
+  btnInspectAndRenew: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  btnInspectAndRenewText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // Monthly Summary Card
+  monthlySummaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  monthlySummaryTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  monthlySummaryNotice: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  monthlyMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  monthlyMetricBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  monthlyMetricNum: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  monthlyMetricLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  complianceBarTrack: {
+    height: 6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    marginTop: 12,
+    overflow: 'hidden',
+  },
+  complianceBarFill: {
+    height: '100%',
+    backgroundColor: '#059669',
+  },
+  fleetListHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+
+  // Fleet Bus Card
+  fleetBusCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  fleetCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  fleetBusPlate: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  fleetBusModel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  monthlyStatusBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  monthlyStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  fleetRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  fleetRouteText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  testDateBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+  },
+  testDateItem: {
+    flex: 1,
+  },
+  testDateLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  testDateValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  testDateSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+  certAuditNotes: {
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 15,
+    marginBottom: 10,
+  },
+  btnRenewTestDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 11,
+    borderRadius: 10,
+  },
+  btnRenewTestDateOverdue: {
+    backgroundColor: '#DC2626',
+  },
+  btnRenewTestDateText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // Job Cards & Legacy Styles
+  jobCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.2,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
   jobCardCompleted: {
-    borderColor: '#a7f3d0',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8FAFC',
+    opacity: 0.85,
   },
   jobTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   jobBadge: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#EFF6FF',
     paddingVertical: 2,
     paddingHorizontal: 6,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   jobBadgeText: {
-    color: '#046bd2',
     fontSize: 10,
     fontWeight: '800',
+    color: '#006FD8',
   },
   busPlate: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   busModel: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#64748B',
     marginTop: 2,
   },
   priorityPill: {
-    paddingVertical: 4,
+    paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
   },
@@ -621,159 +1769,102 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   issueBox: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#edf2f7',
+    padding: 8,
+    marginBottom: 10,
   },
   issueLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
   },
   issueText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#0F172A',
     marginTop: 2,
   },
   reportedBy: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#94A3B8',
     marginTop: 4,
   },
   tasksHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-    marginBottom: 8,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 6,
   },
   taskItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    gap: 10,
+    gap: 8,
+    paddingVertical: 4,
   },
   taskCheckbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#94a3b8',
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
   },
   taskCheckboxDone: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
+    backgroundColor: '#059669',
+    borderColor: '#059669',
   },
   taskTick: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '900',
   },
   taskText: {
     fontSize: 12,
-    color: '#0f172a',
+    color: '#334155',
     flex: 1,
   },
   taskTextDone: {
-    color: '#64748b',
     textDecorationLine: 'line-through',
-  },
-  btnCertify: {
-    backgroundColor: '#10b981',
-    paddingVertical: 11,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  btnCertifyDisabled: {
-    opacity: 0.5,
-  },
-  btnCertifyText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  completedTag: {
-    backgroundColor: '#ecfdf5',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-  },
-  completedTagText: {
-    color: '#059669',
-    fontSize: 11,
-    fontWeight: '800',
+    color: '#94A3B8',
   },
 
-  // SOS Card
+  // SOS Cards
   sosCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  sectionSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-    marginBottom: 14,
-  },
-  sosItem: {
-    backgroundColor: '#fff5f5',
-    borderRadius: 12,
     padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#fed7d7',
   },
-  sosItemResolved: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
+  sosCardDispatched: {
+    borderColor: '#93C5FD',
+  },
+  sosCardResolved: {
+    borderColor: '#A7F3D0',
+    opacity: 0.85,
   },
   sosTopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    marginBottom: 6,
   },
-  sosPlateText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#b91c1c',
-  },
-  sosRouteBadge: {
-    backgroundColor: '#fee2e2',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+  sosPulseDot: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
+    backgroundColor: '#DC2626',
   },
-  sosRouteText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#dc2626',
-  },
-  sosTimeText: {
-    fontSize: 10,
-    color: '#718096',
-    marginTop: 2,
+  sosPlate: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
   },
   sosStatusBadge: {
-    backgroundColor: '#fee2e2',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
+    backgroundColor: '#FEE2E2',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -781,43 +1872,50 @@ const styles = StyleSheet.create({
   sosStatusText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#dc2626',
+    color: '#DC2626',
   },
-  sosIssueBox: {
-    marginVertical: 10,
-    backgroundColor: '#ffffff',
-    padding: 10,
-    borderRadius: 8,
-  },
-  sosIssueText: {
+  sosModel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1a202c',
+    color: '#334155',
+    marginBottom: 2,
   },
-  sosDriverInfo: {
-    fontSize: 10,
-    color: '#718096',
-    marginTop: 4,
+  sosDriver: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 2,
   },
-  dispatchPill: {
-    backgroundColor: '#eff6ff',
-    padding: 8,
-    borderRadius: 6,
+  sosLocation: {
+    fontSize: 11,
+    color: '#006FD8',
+    fontWeight: '600',
     marginBottom: 8,
   },
-  dispatchPillText: {
-    color: '#046bd2',
-    fontSize: 11,
+  breakdownNotice: {
+    backgroundColor: '#FFF1F2',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  breakdownLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#BE123C',
+  },
+  breakdownText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#881337',
+    marginTop: 2,
   },
   btnDeployVan: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#DC2626',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
   btnDeployVanText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -828,125 +1926,134 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnResolveRescueText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
 
   // Diagnostics & Parts
   searchCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F8FAFC',
     borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 14,
-  },
-  searchRow: {
-    marginVertical: 10,
-  },
-  searchInput: {
-    height: 44,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1.5,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  recordBox: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  sectionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  searchRow: {
+    marginBottom: 10,
+  },
+  searchInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.2,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  recordBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   recordHeader: {
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
   },
   recordPlate: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#006FD8',
   },
   recordModel: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
+    fontSize: 12,
+    color: '#64748B',
   },
   recordGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 8,
   },
   recordCol: {
     width: '47%',
+    backgroundColor: '#F8FAFC',
+    padding: 6,
+    borderRadius: 6,
   },
   recordLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94a3b8',
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
   },
   recordVal: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#0F172A',
     marginTop: 2,
   },
   recordFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 8,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 6,
   },
   recordFooterText: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#64748B',
   },
   recordPermitText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#046bd2',
+    color: '#006FD8',
+    fontWeight: '600',
     marginTop: 2,
   },
   noRecordText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#94A3B8',
     fontStyle: 'italic',
-    marginTop: 4,
   },
   partsCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
   },
   partItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#F1F5F9',
   },
   partLeft: {
     flex: 1,
-    paddingRight: 10,
   },
   partName: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#0F172A',
   },
   partCode: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#64748B',
     marginTop: 2,
   },
   partRight: {
@@ -954,138 +2061,187 @@ const styles = StyleSheet.create({
   },
   partStock: {
     fontSize: 14,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  stockPill: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 4,
-    marginTop: 2,
-  },
-  stockPillText: {
-    fontSize: 9,
     fontWeight: '800',
+    color: '#006FD8',
+  },
+  partStockLabel: {
+    fontSize: 9,
+    color: '#64748B',
   },
 
-  // Certificate Modal
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
-  certBox: {
+  modalCard: {
     width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  certHeader: {
-    backgroundColor: '#0b1329',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: '#10b981',
-  },
-  certHeaderSub: {
-    color: '#10b981',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  certHeaderTitle: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  certBody: {
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 20,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  certStamp: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#059669',
-    borderWidth: 2,
-    borderColor: '#059669',
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  certBusText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  certModelText: {
-    fontSize: 11,
-    color: '#64748b',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  certDetailsList: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 8,
-    gap: 6,
-    marginBottom: 14,
+  modalIconCircleBlue: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  certDetailLine: {
+  modalIconCircleGreen: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  modalHeaderSub: {
     fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  modalIssueSummaryBox: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: 12,
+  },
+  modalIssueSummaryLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  modalIssueSummaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#78350F',
+    marginTop: 2,
+  },
+  inputSectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
     color: '#334155',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  timePresetsGrid: {
+    gap: 6,
+    marginBottom: 6,
+  },
+  timePresetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  timePresetBtnSelected: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#006FD8',
+  },
+  timePresetBtnText: {
+    fontSize: 11,
     fontWeight: '600',
+    color: '#475569',
   },
-  certSignBox: {
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 10,
-    marginBottom: 14,
-  },
-  certSignLabel: {
-    fontSize: 9,
+  timePresetBtnTextSelected: {
+    color: '#006FD8',
     fontWeight: '800',
-    color: '#64748b',
   },
-  certSignName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginTop: 2,
+  modalTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.2,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 12,
+    color: '#0F172A',
   },
-  certSignDepot: {
-    fontSize: 10,
-    color: '#64748b',
-  },
-  certSignDate: {
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  btnSignCertificate: {
-    width: '100%',
-    backgroundColor: '#10b981',
+  btnConfirmModalAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
     paddingVertical: 12,
     borderRadius: 10,
-    alignItems: 'center',
+    marginTop: 14,
   },
-  btnSignCertificateText: {
-    color: '#ffffff',
+  btnConfirmModalActionText: {
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
-  btnCancelCert: {
-    paddingVertical: 8,
-    marginTop: 8,
+  modalCheckItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
   },
-  btnCancelCertText: {
-    color: '#64748b',
+  modalCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCheckboxChecked: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  modalCheckTick: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '900',
+  },
+  modalCheckItemText: {
+    fontSize: 12,
+    color: '#1E293B',
+    flex: 1,
+    fontWeight: '600',
+  },
+  btnConfirmRenewal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 13,
+    borderRadius: 10,
+    marginTop: 14,
+  },
+  btnConfirmRenewalText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

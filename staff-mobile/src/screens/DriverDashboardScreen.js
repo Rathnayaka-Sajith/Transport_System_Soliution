@@ -10,11 +10,13 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { MOCK_PASSENGERS } from '../data/mockDatabase';
 import { tripSyncStore } from '../data/tripSyncStore';
+import { mechanicStore } from '../data/mechanicStore';
 
 // Initial Route Stops Configuration
 const INITIAL_STOPS = [
@@ -119,6 +121,28 @@ export default function DriverDashboardScreen({ user }) {
     });
     return unsubscribe;
   }, []);
+
+  // Real-time synchronization with Workshop Mechanics & Fleet Inspections
+  const [mechanicData, setMechanicData] = useState(mechanicStore.getState());
+  const [showReportDefectModal, setShowReportDefectModal] = useState(false);
+  const [defectIssueText, setDefectIssueText] = useState('');
+  const [defectUrgency, setDefectUrgency] = useState('MEDIUM');
+  const [isSubmittingDefect, setIsSubmittingDefect] = useState(false);
+
+  useEffect(() => {
+    const unsub = mechanicStore.subscribe((s) => setMechanicData({ ...s }));
+    return unsub;
+  }, []);
+
+  const busRecord =
+    mechanicData.fleet.find((b) => b.plate === busPlate) ||
+    mechanicData.fleet[0];
+  const busRequests = mechanicData.requests.filter(
+    (r) => r.busPlate === busPlate
+  );
+  const activeBusRequest = busRequests.find(
+    (r) => r.status === 'PENDING' || r.status === 'SCHEDULED' || r.status === 'IN_PROGRESS'
+  );
 
   // Live GPS tracking states
   const [driverCoords, setDriverCoords] = useState(null);
@@ -891,6 +915,50 @@ export default function DriverDashboardScreen({ user }) {
               <Feather name="chevron-right" size={14} color="#006FD8" />
             </View>
           </TouchableOpacity>
+
+          {/* Active Maintenance Status (Synchronized with Workshop Mechanics) */}
+          {activeBusRequest && (
+            <View
+              style={[
+                styles.driverMaintBanner,
+                activeBusRequest.status === 'SCHEDULED' && styles.driverMaintBannerScheduled,
+                activeBusRequest.status === 'PENDING' && styles.driverMaintBannerPending,
+              ]}
+            >
+              <View style={styles.driverMaintIconCol}>
+                <Ionicons
+                  name={activeBusRequest.status === 'SCHEDULED' ? 'construct' : 'time'}
+                  size={16}
+                  color={activeBusRequest.status === 'SCHEDULED' ? '#006FD8' : '#D97706'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.driverMaintTitle}>
+                  {activeBusRequest.status === 'SCHEDULED'
+                    ? `Inspection Scheduled: ${activeBusRequest.scheduledTime}`
+                    : 'Issue Report Sent to Workshop Mechanics'}
+                </Text>
+                <Text style={styles.driverMaintSub}>
+                  {activeBusRequest.status === 'SCHEDULED'
+                    ? `Assigned: ${activeBusRequest.assignedMechanic} • Issue: "${activeBusRequest.issue}"`
+                    : `Pending mechanic claim • "${activeBusRequest.issue}"`}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Report Vehicle Issue to Mechanics Button */}
+          <TouchableOpacity
+            style={styles.btnOpenDefectModal}
+            onPress={() => setShowReportDefectModal(true)}
+            activeOpacity={0.8}
+          >
+            <Feather name="alert-triangle" size={14} color="#D97706" />
+            <Text style={styles.btnOpenDefectModalText}>
+              Report Vehicle Issue to Mechanics
+            </Text>
+            <Feather name="chevron-right" size={13} color="#D97706" />
+          </TouchableOpacity>
         </View>
 
         {/* Start Button */}
@@ -975,16 +1043,19 @@ export default function DriverDashboardScreen({ user }) {
                 </View>
               </View>
 
-              {/* Latest Test Date */}
+              {/* Latest Test Date (Dynamic with Mechanic Renewals) */}
               <View style={styles.infoCard}>
                 <View style={styles.infoIconCol}>
                   <Feather name="check-circle" size={18} color="#059669" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.infoLabel}>Latest Test Date & Inspection</Text>
-                  <Text style={styles.infoValueMain}>28 Oct 2026</Text>
+                  <Text style={styles.infoValueMain}>{busRecord.latestTestDate}</Text>
                   <Text style={styles.infoSubText}>
-                    Passed NTC Roadworthiness, Dual-Air Brakes & Safety Audit
+                    {busRecord.inspectionNotes}
+                  </Text>
+                  <Text style={styles.infoCertSubText}>
+                    Cert #{busRecord.inspectionCertNo} • Inspector: {busRecord.inspectorName}
                   </Text>
                 </View>
               </View>
@@ -996,10 +1067,25 @@ export default function DriverDashboardScreen({ user }) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.infoLabel}>Fleet Registration</Text>
-                  <Text style={styles.infoValueMain}>Thambuththegama Central Depot</Text>
-                  <Text style={styles.infoSubText}>Expressway Highway Permit #NTC-WP-8812</Text>
+                  <Text style={styles.infoValueMain}>{busRecord.depot}</Text>
+                  <Text style={styles.infoSubText}>{busRecord.assignedRoute}</Text>
                 </View>
               </View>
+
+              {/* Report Issue for this Vehicle */}
+              <TouchableOpacity
+                style={styles.btnModalReportDefect}
+                onPress={() => {
+                  setShowBusDetailsModal(false);
+                  setShowReportDefectModal(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Feather name="alert-triangle" size={15} color="#D97706" />
+                <Text style={styles.btnModalReportDefectText}>
+                  Report Vehicle Issue to Mechanics
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -1008,6 +1094,164 @@ export default function DriverDashboardScreen({ user }) {
               activeOpacity={0.8}
             >
               <Text style={styles.closeModalBtnText}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Driver Report Defect / Vehicle Issue Modal */}
+      <Modal
+        visible={showReportDefectModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReportDefectModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowReportDefectModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.defectModalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalWarningIconCircle}>
+                  <Feather name="alert-triangle" size={18} color="#D97706" />
+                </View>
+                <View>
+                  <Text style={styles.modalHeaderTitle}>Report Vehicle Issue</Text>
+                  <Text style={styles.modalHeaderSub}>Bus {busPlate} • Workshop Notification</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowReportDefectModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Notice */}
+              <View style={styles.defectNoticeBox}>
+                <Ionicons name="information-circle-outline" size={16} color="#006FD8" />
+                <Text style={styles.defectNoticeText}>
+                  Your report goes directly to the workshop mechanics. A mechanic will claim the request and schedule an inspection time.
+                </Text>
+              </View>
+
+              {/* Quick Issue Chips */}
+              <Text style={styles.defectSectionLabel}>Common Issues (Tap to fill):</Text>
+              <View style={styles.chipsRow}>
+                {[
+                  'Brake vibration / squeal',
+                  'AC cooling weak in cabin',
+                  'Air suspension leak / hissing',
+                  'Engine temperature rising',
+                  'Tire pressure drop / wear',
+                  'Headlight / Indicator issue',
+                ].map((chip) => (
+                  <TouchableOpacity
+                    key={chip}
+                    style={styles.defectChip}
+                    onPress={() => setDefectIssueText(chip)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.defectChipText}>{chip}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Issue Description Text Input */}
+              <Text style={styles.defectSectionLabel}>Describe Vehicle Issue:</Text>
+              <TextInput
+                style={styles.defectTextInput}
+                placeholder="E.g., Brake vibrating when stopping, AC low pressure..."
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={3}
+                value={defectIssueText}
+                onChangeText={setDefectIssueText}
+              />
+
+              {/* Urgency Level */}
+              <Text style={styles.defectSectionLabel}>Urgency Priority:</Text>
+              <View style={styles.urgencyRow}>
+                {[
+                  { id: 'LOW', label: 'Low', color: '#64748B' },
+                  { id: 'MEDIUM', label: 'Medium', color: '#D97706' },
+                  { id: 'HIGH', label: 'High', color: '#DC2626' },
+                  { id: 'URGENT', label: 'Urgent Breakdown', color: '#991B1B' },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.urgencyBtn,
+                      defectUrgency === item.id && {
+                        borderColor: item.color,
+                        backgroundColor: item.color + '15',
+                      },
+                    ]}
+                    onPress={() => setDefectUrgency(item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.urgencyBtnText,
+                        defectUrgency === item.id && { color: item.color, fontWeight: '800' },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={styles.btnSubmitDefect}
+              onPress={() => {
+                if (!defectIssueText.trim()) {
+                  Alert.alert('Required', 'Please enter a description of the issue.');
+                  return;
+                }
+                setIsSubmittingDefect(true);
+                setTimeout(() => {
+                  mechanicStore.submitDriverIssue({
+                    busPlate,
+                    driverName: user?.name || 'Kamal Jayawardena',
+                    driverPhone: user?.phone || '+94 77 234 5678',
+                    issue: defectIssueText.trim(),
+                    urgency: defectUrgency,
+                  });
+                  setIsSubmittingDefect(false);
+                  setDefectIssueText('');
+                  setShowReportDefectModal(false);
+                  Alert.alert(
+                    'Request Sent to Mechanics',
+                    `Your maintenance request for bus ${busPlate} has been sent to the workshop mechanics. A mechanic will review it and assign an inspection time.`
+                  );
+                }, 400);
+              }}
+              activeOpacity={0.85}
+              disabled={isSubmittingDefect}
+            >
+              {isSubmittingDefect ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="send" size={16} color="#FFFFFF" />
+                  <Text style={styles.btnSubmitDefectText}>
+                    Send Request to Workshop Mechanics
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1821,6 +2065,200 @@ const styles = StyleSheet.create({
   btnCompletePickupText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '800',
+  },
+
+  // Driver Maintenance & Defect Styles
+  driverMaintBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+  },
+  driverMaintBannerScheduled: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  driverMaintBannerPending: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  driverMaintIconCol: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverMaintTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  driverMaintSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  btnOpenDefectModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.2,
+    borderColor: '#FCD34D',
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  btnOpenDefectModalText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
+    flex: 1,
+    marginLeft: 6,
+  },
+  infoCertSubText: {
+    fontSize: 10,
+    color: '#059669',
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  btnModalReportDefect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.2,
+    borderColor: '#FCD34D',
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  btnModalReportDefectText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+
+  // Defect Modal Styles
+  defectModalCard: {
+    width: '92%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalWarningIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  defectNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  defectNoticeText: {
+    fontSize: 11,
+    color: '#0369A1',
+    flex: 1,
+    lineHeight: 15,
+  },
+  defectSectionLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 6,
+    marginTop: 8,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
+  },
+  defectChip: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  defectChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  defectTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.2,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    minHeight: 70,
+    textAlignVertical: 'top',
+  },
+  urgencyRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+  },
+  urgencyBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    borderWidth: 1.2,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  urgencyBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  btnSubmitDefect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 13,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  btnSubmitDefectText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '800',
   },
 });
