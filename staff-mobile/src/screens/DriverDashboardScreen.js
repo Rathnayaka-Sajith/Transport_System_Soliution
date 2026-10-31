@@ -105,6 +105,7 @@ const calculateDistanceKm = (fromLat, fromLng, toLat, toLng) => {
 export default function DriverDashboardScreen({ user }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showBusDetailsModal, setShowBusDetailsModal] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [isTripStarted, setIsTripStarted] = useState(false);
   const [stops, setStops] = useState(INITIAL_STOPS);
   const [passengersList, setPassengersList] = useState(MOCK_PASSENGERS);
@@ -114,6 +115,7 @@ export default function DriverDashboardScreen({ user }) {
   const [gpsStatus, setGpsStatus] = useState('STANDBY'); // 'STANDBY' | 'ACQUIRING' | 'ACTIVE' | 'PERMISSION_DENIED' | 'ERROR'
   const [isGpsLoading, setIsGpsLoading] = useState(false);
   const locationWatcherRef = useRef(null);
+  const hasAutoOpenedModalRef = useRef({});
 
   const tripTime = '08:45 PM';
   const routeName = 'Route 87: Thambuththegama ➔ Jaffna (Via Thalawa & Anuradhapura)';
@@ -176,6 +178,22 @@ export default function DriverDashboardScreen({ user }) {
 
   const isWithin50m = distToActiveStopMeters <= 50;
 
+  // Calculate live bus speed in km/h from location GPS sensor
+  const currentSpeedKmH =
+    driverCoords && typeof driverCoords.speed === 'number' && driverCoords.speed > 0
+      ? Math.round(driverCoords.speed * 3.6)
+      : 0;
+
+  // Auto-open check-in popup window when bus arrives within 50m of active stop
+  useEffect(() => {
+    if (isTripStarted && isWithin50m && activeStop && activeStop.type === 'PICKUP') {
+      if (!hasAutoOpenedModalRef.current[activeStop.id]) {
+        hasAutoOpenedModalRef.current[activeStop.id] = true;
+        setShowCheckInModal(true);
+      }
+    }
+  }, [isTripStarted, isWithin50m, activeStop?.id]);
+
   const distanceToNextPickupKm =
     driverCoords && driverCoords.latitude && activeStop
       ? calculateDistanceKm(
@@ -203,9 +221,6 @@ export default function DriverDashboardScreen({ user }) {
   const allActivePassengersBoarded =
     activeStopPassengers.length > 0 &&
     activeStopPassengers.every((p) => p.status === 'BOARDED');
-  const pendingCountAtActiveStop = activeStopPassengers.filter(
-    (p) => p.status === 'PENDING'
-  ).length;
 
   // Toggle passenger boarding (Only allowed if stop is NOT passed)
   const handleToggleBoarding = (ticketRef, stopStatus) => {
@@ -273,8 +288,8 @@ export default function DriverDashboardScreen({ user }) {
     });
 
     Alert.alert(
-      'Departed Stop',
-      `${stopName} has been passed. Un-checked passengers marked as "Missed Trip". Next pickup stop is now active.`
+      'Pickup Completed',
+      `${stopName} completed. Unchecked passengers marked as "Missed Trip". Next pickup stop is now active.`
     );
   };
 
@@ -431,7 +446,7 @@ export default function DriverDashboardScreen({ user }) {
 
           <View style={styles.navStatusPill}>
             <View style={styles.navPulseDot} />
-            <Text style={styles.navStatusPillText}>In-Transit • Route 87</Text>
+            <Text style={styles.navStatusPillText}>Ongoing Route 87</Text>
           </View>
 
           <TouchableOpacity
@@ -439,44 +454,26 @@ export default function DriverDashboardScreen({ user }) {
             onPress={launchGoogleMapsNavigation}
             activeOpacity={0.8}
           >
-            <Feather name="navigation" size={14} color="#006FD8" />
-            <Text style={styles.openExternalMapsText}>Maps App</Text>
+            <Ionicons name="map" size={15} color="#006FD8" />
+            <Text style={styles.openExternalMapsText}>Open Map</Text>
           </TouchableOpacity>
         </View>
 
         {/* Live GPS Telematics Card */}
         <View style={styles.telematicsCard}>
-          {/* Status & Live GPS Coordinates Header */}
-          <View style={styles.telematicsHeader}>
-            <View style={styles.telematicsStatusRow}>
-              <View
-                style={[
-                  styles.gpsStatusDot,
-                  gpsStatus === 'ACTIVE'
-                    ? styles.gpsDotGreen
-                    : gpsStatus === 'ACQUIRING'
-                    ? styles.gpsDotYellow
-                    : styles.gpsDotRed,
-                ]}
-              />
-              <Text style={styles.gpsStatusTitle}>
-                {gpsStatus === 'ACTIVE'
-                  ? 'Live Mobile GPS Active'
-                  : gpsStatus === 'ACQUIRING'
-                  ? 'Acquiring GPS fix...'
-                  : gpsStatus === 'PERMISSION_DENIED'
-                  ? 'GPS Permission Required'
-                  : 'GPS Ready'}
+          {/* Current Speed of Bus & GPS Telematics Status */}
+          <View style={styles.speedRow}>
+            <View style={styles.speedPill}>
+              <Ionicons name="speedometer-outline" size={16} color="#006FD8" />
+              <Text style={styles.speedLabel}>Current Speed:</Text>
+              <Text style={styles.speedValue}>
+                {currentSpeedKmH > 0 ? `${currentSpeedKmH} km/h` : '0 km/h (Stationary)'}
               </Text>
             </View>
 
-            <View style={styles.gpsBadge}>
-              <Ionicons name="navigate-circle" size={13} color="#006FD8" />
-              <Text style={styles.gpsBadgeText}>
-                {driverCoords
-                  ? `${driverCoords.latitude.toFixed(4)}°, ${driverCoords.longitude.toFixed(4)}°`
-                  : 'High Precision'}
-              </Text>
+            <View style={styles.telematicsLiveBadge}>
+              <View style={styles.navPulseDot} />
+              <Text style={styles.telematicsLiveText}>GPS Synchronized</Text>
             </View>
           </View>
 
@@ -497,23 +494,6 @@ export default function DriverDashboardScreen({ user }) {
               <Text style={styles.distPlaceSubPrimary} numberOfLines={1}>
                 {activeStop.name}
               </Text>
-              <View
-                style={[
-                  styles.passengerCountPill,
-                  isWithin50m && styles.passengerCountPillArrived,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.passengerCountPillText,
-                    isWithin50m && styles.passengerCountPillArrivedText,
-                  ]}
-                >
-                  {isWithin50m
-                    ? '📍 Within 50m of stop!'
-                    : `${pendingCountAtActiveStop} Waiting to Board`}
-                </Text>
-              </View>
             </View>
 
             {/* 2. Remaining Distance to End Trip */}
@@ -531,72 +511,33 @@ export default function DriverDashboardScreen({ user }) {
               <Text style={styles.distPlaceSubSecondary} numberOfLines={1}>
                 Jaffna Central Terminal
               </Text>
-              <View style={styles.routeTagPill}>
-                <Text style={styles.routeTagPillText}>Final Destination</Text>
-              </View>
             </View>
           </View>
 
-          {/* Active Pickup Place Action Banner */}
-          <View
+          {/* Next Pickup Card (Clickable to open check-in popup) */}
+          <TouchableOpacity
             style={[
-              styles.nextStopNotice,
-              isWithin50m && styles.nextStopNoticeArrived,
-              allActivePassengersBoarded && styles.nextStopNoticeAllDone,
+              styles.nextPickupCard,
+              isWithin50m && styles.nextPickupCardArrived,
             ]}
+            onPress={() => setShowCheckInModal(true)}
+            activeOpacity={0.8}
           >
-            <View style={styles.nextStopIconCircle}>
-              <Ionicons
-                name={allActivePassengersBoarded ? 'checkmark-circle' : 'location-sharp'}
-                size={16}
-                color={allActivePassengersBoarded ? '#10B981' : '#006FD8'}
-              />
+            <View style={styles.nextPickupIconCircle}>
+              <Ionicons name="location-sharp" size={16} color="#006FD8" />
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={styles.nextStopNoticeTitle}>
-                {isWithin50m ? '📍 Arrived at: ' : 'Active Pickup: '}
-                {activeStop.name}
-              </Text>
-              <Text style={styles.nextStopNoticeSub}>
-                {allActivePassengersBoarded
-                  ? 'All passengers boarded! Ready to depart.'
-                  : `${pendingCountAtActiveStop} passenger(s) pending check-in`}
-              </Text>
+              <Text style={styles.nextPickupTitle}>Next Pickup: {activeStop.name}</Text>
+              {isWithin50m && (
+                <Text style={styles.arrivedBadgeText}>📍 Arrived within 50m of stop</Text>
+              )}
             </View>
 
-            {/* Depart / Pass Stop Button */}
-            {activeStop.status !== 'PASSED' && activeStop.type === 'PICKUP' && (
-              <TouchableOpacity
-                style={[
-                  styles.departStopBtn,
-                  allActivePassengersBoarded && styles.departStopBtnReady,
-                ]}
-                onPress={() => handleDepartStop(activeStop.id)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.departStopBtnText,
-                    allActivePassengersBoarded && styles.departStopBtnReadyText,
-                  ]}
-                >
-                  {allActivePassengersBoarded ? 'Depart Stop ➔' : 'Pass Stop ➔'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Main Action: Multi-stop Google Maps Navigation */}
-          <TouchableOpacity
-            style={styles.btnOpenGoogleMaps}
-            onPress={launchGoogleMapsNavigation}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="navigate" size={18} color="#FFFFFF" />
-            <Text style={styles.btnOpenGoogleMapsText}>
-              Open Live Google Maps Navigation (Via Stops ➔ Jaffna)
-            </Text>
+            <View style={styles.openCheckInBtn}>
+              <Text style={styles.openCheckInBtnText}>Check In</Text>
+              <Feather name="chevron-right" size={14} color="#006FD8" />
+            </View>
           </TouchableOpacity>
 
           {/* Trip Controls (Rest Stop / End Trip) */}
@@ -631,7 +572,7 @@ export default function DriverDashboardScreen({ user }) {
         {/* Scrollable Waypoint & Booked Passenger Manifest */}
         <ScrollView style={styles.passengerScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.stopsHeaderRow}>
-            <Text style={styles.stopsSectionTitle}>Pickup Stoppages & Manifest</Text>
+            <Text style={styles.stopsSectionTitle}>Next Stops</Text>
             <Text style={styles.stopsCountBadge}>Auto-sorted by arrival</Text>
           </View>
 
@@ -812,6 +753,115 @@ export default function DriverDashboardScreen({ user }) {
 
           <View style={{ height: 30 }} />
         </ScrollView>
+
+        {/* Check-In Popup Modal (Auto-opens on arrival <50m or on tap) */}
+        <Modal
+          visible={showCheckInModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowCheckInModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowCheckInModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.checkInModalCard}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={styles.modalLocationIconCircle}>
+                    <Ionicons name="location" size={18} color="#006FD8" />
+                  </View>
+                  <View>
+                    <Text style={styles.modalHeaderTitle}>{activeStop.name}</Text>
+                    <Text style={styles.modalHeaderSub}>
+                      {activeStopPassengers.length} Booked Passengers • Scheduled {activeStop.time}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setShowCheckInModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Feather name="x" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Arrival Notice */}
+              <View style={styles.modalArrivalNotice}>
+                <Ionicons name="information-circle" size={16} color="#006FD8" />
+                <Text style={styles.modalArrivalNoticeText}>
+                  {allActivePassengersBoarded
+                    ? 'All passengers boarded! Ready to depart.'
+                    : 'Check in boarding passengers. Unchecked passengers will be marked as Missed Trip upon departure.'}
+                </Text>
+              </View>
+
+              {/* Passenger List */}
+              <ScrollView style={{ maxHeight: 250 }} showsVerticalScrollIndicator={false}>
+                {activeStopPassengers.map((p) => {
+                  const isBoarded = p.status === 'BOARDED';
+                  return (
+                    <View key={p.ticketRef} style={styles.modalPassengerRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.passengerNameText}>{p.name}</Text>
+                        <Text style={styles.passengerSeatText}>
+                          Seats: {p.seats.join(', ')} • Destination: {p.destination}
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.callSmallBtn}
+                        onPress={() => handleCallPassenger(p.phone, p.name)}
+                      >
+                        <Feather name="phone" size={13} color="#006FD8" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.boardCheckBtn,
+                          isBoarded && styles.boardCheckBtnDone,
+                        ]}
+                        onPress={() => handleToggleBoarding(p.ticketRef, activeStop.status)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.boardCheckText,
+                            isBoarded && styles.boardCheckTextDone,
+                          ]}
+                        >
+                          {isBoarded ? '✓ Boarded' : 'Check In'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Complete Pickup Button */}
+              <TouchableOpacity
+                style={styles.btnCompletePickup}
+                onPress={() => {
+                  setShowCheckInModal(false);
+                  handleDepartStop(activeStop.id);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                <Text style={styles.btnCompletePickupText}>
+                  Complete Pickup & Depart ➔
+                </Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
       </View>
     );
   }
@@ -1288,37 +1338,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ECFDF5',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: '#CBD5E1',
   },
   navPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#006FD8',
   },
   navStatusPillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#059669',
+    color: '#0F172A',
   },
   openExternalMapsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     backgroundColor: '#EFF6FF',
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#BFDBFE',
   },
   openExternalMapsText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     color: '#006FD8',
   },
@@ -1337,52 +1387,46 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  telematicsHeader: {
+
+  // Speed and Telematics Row
+  speedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  telematicsStatusRow: {
+  speedPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  gpsStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  gpsDotGreen: {
-    backgroundColor: '#10B981',
-  },
-  gpsDotYellow: {
-    backgroundColor: '#F59E0B',
-  },
-  gpsDotRed: {
-    backgroundColor: '#EF4444',
-  },
-  gpsStatusTitle: {
-    fontSize: 11,
+  speedLabel: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#64748B',
+  },
+  speedValue: {
+    fontSize: 14,
+    fontWeight: '900',
     color: '#0F172A',
   },
-  gpsBadge: {
+  telematicsLiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  gpsBadgeText: {
+  telematicsLiveText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#006FD8',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#64748B',
   },
 
   // Remaining Distance Row & Cards
@@ -1390,7 +1434,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   remainingDistCardPrimary: {
     flex: 1,
@@ -1425,25 +1469,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 6,
-  },
-  passengerCountPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#DBEAFE',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-  },
-  passengerCountPillArrived: {
-    backgroundColor: '#DCFCE7',
-  },
-  passengerCountPillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#1D4ED8',
-  },
-  passengerCountPillArrivedText: {
-    color: '#15803D',
   },
 
   remainingDistCardSecondary: {
@@ -1474,19 +1499,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#334155',
-    marginBottom: 6,
-  },
-  routeTagPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#E2E8F0',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-  },
-  routeTagPillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#475569',
   },
   metricIconRow: {
     flexDirection: 'row',
@@ -1495,86 +1507,59 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Active Next Stop Notice Banner
-  nextStopNotice: {
+  // Next Pickup Card
+  nextPickupCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    padding: 10,
+    padding: 12,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    marginVertical: 6,
+    marginTop: 8,
+    marginBottom: 6,
   },
-  nextStopNoticeArrived: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#86EFAC',
+  nextPickupCardArrived: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#93C5FD',
   },
-  nextStopNoticeAllDone: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#6EE7B7',
-  },
-  nextStopIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  nextPickupIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
-  nextStopNoticeTitle: {
-    fontSize: 12,
+  nextPickupTitle: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
   },
-  nextStopNoticeSub: {
+  arrivedBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 1,
+    fontWeight: '700',
+    color: '#006FD8',
+    marginTop: 2,
   },
-  departStopBtn: {
+  openCheckInBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
     backgroundColor: '#EFF6FF',
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
-  departStopBtnReady: {
-    backgroundColor: '#10B981',
-    borderColor: '#059669',
-  },
-  departStopBtnText: {
+  openCheckInBtnText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#006FD8',
-  },
-  departStopBtnReadyText: {
-    color: '#FFFFFF',
-  },
-
-  // Main Action: Multi-Stop Google Maps Navigation
-  btnOpenGoogleMaps: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#006FD8',
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 6,
-    shadowColor: '#006FD8',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  btnOpenGoogleMapsText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
   },
 
   // Trip Secondary Controls
@@ -1582,7 +1567,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 10,
+    marginTop: 8,
   },
   tripControlBtn: {
     flex: 1,
@@ -1621,7 +1606,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   stopsSectionTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
@@ -1800,5 +1785,70 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: '#94A3B8',
     paddingVertical: 4,
+  },
+
+  // Check-In Modal Card
+  checkInModalCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalLocationIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  modalArrivalNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0F9FF',
+    padding: 10,
+    borderRadius: 10,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  modalArrivalNoticeText: {
+    fontSize: 11,
+    color: '#1E40AF',
+    flex: 1,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+  modalPassengerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  btnCompletePickup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 13,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  btnCompletePickupText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
