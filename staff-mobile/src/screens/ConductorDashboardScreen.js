@@ -9,12 +9,11 @@ import {
   Alert,
   Modal,
   Linking,
-  Image,
-  ActivityIndicator,
   Platform,
   Animated,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { tripSyncStore } from '../data/tripSyncStore';
 
 // PNG Express Official Bank Account Details
@@ -138,6 +137,11 @@ export default function ConductorDashboardScreen({ user }) {
     return passengers.filter((p) => p.stopId === activeStop?.id);
   }, [passengers, activeStop?.id]);
 
+  // Check if all passengers at this stop have boarded
+  const allActivePassengersBoarded =
+    activeStopPassengers.length > 0 &&
+    activeStopPassengers.every((p) => p.status === 'BOARDED');
+
   // -------------------------------------------------------------
   // PAGE 1 STATE: CALENDAR & BUS SEATING MODAL
   // -------------------------------------------------------------
@@ -156,20 +160,13 @@ export default function ConductorDashboardScreen({ user }) {
   const [isSubmittingReserve, setIsSubmittingReserve] = useState(false);
   const [inspectedSeatReservation, setInspectedSeatReservation] = useState(null);
 
-  // Verify Payment Modal in Calendar
-  const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [activePendingToVerify, setActivePendingToVerify] = useState(null);
-  const [bankSlipRef, setBankSlipRef] = useState('');
-  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
-
-  // Digital Ticket QR Pass Modal
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [activeConfirmedRes, setActiveConfirmedRes] = useState(null);
-
   // -------------------------------------------------------------
-  // PAGE 2 STATE: TICKET CHECKER & ARRIVAL POPUP
+  // PAGE 2 STATE: REAL CAMERA QR SCANNER & PHONE LOOKUP
   // -------------------------------------------------------------
   const [verifyTab, setVerifyTab] = useState('QR'); // 'QR' | 'PHONE'
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [hasScanned, setHasScanned] = useState(false);
   const [searchPhoneQuery, setSearchPhoneQuery] = useState('');
   const [scannedTicketResult, setScannedTicketResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -210,13 +207,67 @@ export default function ConductorDashboardScreen({ user }) {
     }
   }, [isTripStarted, isWithin50m, activeStop?.id]);
 
+  // Real Camera Barcode Scanned Callback
+  const handleBarcodeScanned = ({ data }) => {
+    if (hasScanned) return;
+    setHasScanned(true);
+
+    let rawRef = (data || '').trim();
+    if (rawRef.includes('/ticket/')) {
+      rawRef = rawRef.split('/ticket/')[1].split('/')[0].split('?')[0];
+    }
+
+    const matched = passengers.find(
+      (p) =>
+        p.ticketRef.toUpperCase() === rawRef.toUpperCase() ||
+        rawRef.toUpperCase().includes(p.ticketRef.toUpperCase())
+    );
+
+    if (matched) {
+      setScannedTicketResult(matched);
+      Alert.alert(
+        'QR Code Verified',
+        `Ticket Ref: ${matched.ticketRef}\nPassenger: ${matched.name}\nSeats: ${matched.seats.join(', ')}\nPayment Status: ${matched.paymentStatus} (Rs. ${matched.fareRs.toLocaleString()})`,
+        [
+          {
+            text: '✓ Board Passenger',
+            onPress: () => {
+              handleToggleBoarding(matched.ticketRef);
+              setScannedTicketResult((prev) =>
+                prev ? { ...prev, status: 'BOARDED' } : null
+              );
+              setTimeout(() => setHasScanned(false), 2000);
+            },
+          },
+          {
+            text: 'Scan Next',
+            onPress: () => {
+              setTimeout(() => setHasScanned(false), 1000);
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'QR Code Scanned',
+        `Scanned Data: "${data}"\nNo matching booking found on Route 87 manifest.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setTimeout(() => setHasScanned(false), 1500);
+            },
+          },
+        ]
+      );
+    }
+  };
+
   // Check if date is strictly in current active operational week
   const isDateUnlocked = (testDate) => {
     const t = new Date(testDate).setHours(12, 0, 0, 0);
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
-
-  const selectedDateKey = formatDateKey(selectedDate);
 
   // Tap day in calendar: opens bus seating modal directly
   const handleDayClick = (dayDate, unlocked) => {
@@ -242,9 +293,7 @@ export default function ConductorDashboardScreen({ user }) {
     if (selectedSeatsForBooking.includes(seatNum)) {
       return { seatNumber: seatNum, status: 'SELECTED', reservation: null };
     }
-    const found = passengers.find(
-      (p) => (p.seats || []).includes(seatNum)
-    );
+    const found = passengers.find((p) => (p.seats || []).includes(seatNum));
     if (found) {
       return {
         seatNumber: seatNum,
@@ -306,7 +355,6 @@ export default function ConductorDashboardScreen({ user }) {
       checkedInBy: null,
     };
 
-    // Add into shared sync store
     tripSyncStore.markPassengerBoardedDirect(newTicket.ticketRef, 'Conductor');
 
     const waMessage = `🚌 *PNG EXPRESS - SEAT RESERVATION (PENDING PAYMENT)*
@@ -356,6 +404,16 @@ Thank you for choosing PNG Express! Safe travels.`;
   const handleToggleBoarding = (ticketRef) => {
     const conductorName = user?.name ? `Conductor ${user.name.split(' ')[0]}` : 'Conductor Nimal';
     tripSyncStore.checkInPassenger(ticketRef, conductorName);
+  };
+
+  // Complete current pickup stop and advance to next stop
+  const handleDepartCurrentStop = () => {
+    const departingName = activeStop.name;
+    tripSyncStore.departStop(activeStop.id);
+    Alert.alert(
+      'Stop Completed',
+      `${departingName} completed. Now en-route to the next pickup stop.`
+    );
   };
 
   const handleCallPassenger = (phone, name) => {
@@ -489,7 +547,6 @@ Thank you for choosing PNG Express! Safe travels.`;
             <Feather name="chevron-right" size={20} color="#006FD8" />
           </View>
         </TouchableOpacity>
-
 
         {/* Fast Current Week Carousel */}
         <ScrollView
@@ -943,27 +1000,33 @@ Thank you for choosing PNG Express! Safe travels.`;
 
         <View style={styles.tripStatusPill}>
           <View style={styles.livePulseDot} />
-          <Text style={styles.tripStatusPillText}>In-Transit</Text>
+          <Text style={styles.tripStatusPillText}>Ongoing Route 87</Text>
         </View>
       </View>
 
-      {/* SECTION 1: NEXT PICKUP PLACE CARD (MATCHING USER SCREENSHOT) */}
+      {/* SECTION 1: NEXT PICKUP PLACE CARD */}
       <View style={styles.nextPickupCardScreenshot}>
         <View style={styles.nextPickupTopScreenshot}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
             <View style={styles.locationPinCircle}>
               <Ionicons name="location-sharp" size={20} color="#006FD8" />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.nextPickupLabelScreenshot}>Next Pickup Place</Text>
               <Text style={styles.nextPickupPlaceTitleScreenshot}>{activeStop.name}</Text>
             </View>
           </View>
 
-          {isWithin50m && (
+          {/* Only display arrival pill when bus has actually reached the stop (<50m) */}
+          {isWithin50m ? (
             <View style={styles.within50mBadgeScreenshot}>
               <View style={styles.livePulseDotGreen} />
-              <Text style={styles.within50mBadgeText}>Within 50m</Text>
+              <Text style={styles.within50mBadgeText}>Arrived at Stop</Text>
+            </View>
+          ) : (
+            <View style={styles.enRoutePill}>
+              <Ionicons name="bus-outline" size={13} color="#64748B" />
+              <Text style={styles.enRoutePillText}>En Route</Text>
             </View>
           )}
         </View>
@@ -978,7 +1041,7 @@ Thank you for choosing PNG Express! Safe travels.`;
           </Text>
         </View>
 
-        {/* Passenger Cards Matching User Screenshot Exactly */}
+        {/* Passenger Cards Matching User Screenshot */}
         {activeStopPassengers.map((p) => {
           const isBoarded = p.status === 'BOARDED';
           return (
@@ -1049,20 +1112,42 @@ Thank you for choosing PNG Express! Safe travels.`;
           );
         })}
 
-        {/* Open Arrival Check-In Window Button Matching Screenshot */}
+        {/* STOP COMPLETION & NEXT PICKUP ADVANCEMENT */}
+        {allActivePassengersBoarded && (
+          <View style={styles.stopDepartReadyBanner}>
+            <Ionicons name="checkmark-done-circle" size={20} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stopDepartReadyTitle}>
+                All passengers boarded at {activeStop.name}!
+              </Text>
+              <Text style={styles.stopDepartReadySub}>
+                Tap to complete this stop and show the next pickup point.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.btnDepartStopNext}
+              onPress={handleDepartCurrentStop}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnDepartStopNextText}>Next Stop ➔</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* FIXED: Open Arrival Check-In Window Button - cleanly contained inside box */}
         <TouchableOpacity
           style={styles.btnOpenArrivalCheckInScreenshot}
           onPress={() => setShowArrivalModal(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="checkbox-outline" size={18} color="#006FD8" />
-          <Text style={styles.btnOpenArrivalCheckInTextScreenshot}>
-            Open Arrival Check-In Window ({activeStop.name})
+          <Ionicons name="checkbox-outline" size={17} color="#006FD8" />
+          <Text style={styles.btnOpenArrivalCheckInTextScreenshot} numberOfLines={1}>
+            Check-In Window ({activeStop.name})
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* SECTION 2: TICKET VERIFICATION (CAMERA QR SCANNER & PHONE NUMBER LOOKUP) */}
+      {/* SECTION 2: REAL CAMERA QR SCANNER & PHONE NUMBER LOOKUP */}
       <View style={styles.ticketVerificationSection}>
         <View style={styles.ticketSectionTitleRow}>
           <Ionicons name="shield-checkmark" size={18} color="#006FD8" />
@@ -1116,40 +1201,86 @@ Thank you for choosing PNG Express! Safe travels.`;
           </TouchableOpacity>
         </View>
 
-        {/* TAB 1: CAMERA QR CODE SCANNER */}
+        {/* TAB 1: REAL CAMERA QR CODE SCANNER */}
         {verifyTab === 'QR' && (
           <View>
-            <View style={styles.cameraViewfinderBox}>
-              <View style={[styles.cornerMark, styles.cornerTL]} />
-              <View style={[styles.cornerMark, styles.cornerTR]} />
-              <View style={[styles.cornerMark, styles.cornerBL]} />
-              <View style={[styles.cornerMark, styles.cornerBR]} />
+            {/* If camera permission is not yet granted, show permission request card */}
+            {!cameraPermission || !cameraPermission.granted ? (
+              <View style={styles.cameraPermissionBox}>
+                <Ionicons name="camera" size={40} color="#006FD8" />
+                <Text style={styles.cameraPermissionTitle}>Camera Access Required</Text>
+                <Text style={styles.cameraPermissionSub}>
+                  Please allow camera access to scan ticket QR passes directly with your phone.
+                </Text>
+                <TouchableOpacity
+                  style={styles.btnGrantCamera}
+                  onPress={requestCameraPermission}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
+                  <Text style={styles.btnGrantCameraText}>Allow Camera Access</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* REAL CAMERA VIEW WITH SCANNER OVERLAY */
+              <View style={styles.cameraViewfinderBox}>
+                <CameraView
+                  style={StyleSheet.absoluteFillObject}
+                  facing="back"
+                  enableTorch={isTorchOn}
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['qr'],
+                  }}
+                  onBarcodeScanned={hasScanned ? undefined : handleBarcodeScanned}
+                />
 
-              <Animated.View
-                style={[
-                  styles.scanningLaserLine,
-                  {
-                    transform: [
-                      {
-                        translateY: laserAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 160],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
+                {/* Viewfinder Target Overlays */}
+                <View style={[styles.cornerMark, styles.cornerTL]} />
+                <View style={[styles.cornerMark, styles.cornerTR]} />
+                <View style={[styles.cornerMark, styles.cornerBL]} />
+                <View style={[styles.cornerMark, styles.cornerBR]} />
 
-              <Ionicons name="qr-code-outline" size={70} color="rgba(255,255,255,0.3)" />
-              <Text style={styles.cameraAimText}>
-                Aim camera at passenger's digital ticket QR code
-              </Text>
-            </View>
+                <Animated.View
+                  style={[
+                    styles.scanningLaserLine,
+                    {
+                      transform: [
+                        {
+                          translateY: laserAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, 150],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
 
-            {/* Quick Test Scan Buttons */}
+                <View style={styles.cameraControlsOverlay}>
+                  <TouchableOpacity
+                    style={[styles.torchToggleBtn, isTorchOn && styles.torchToggleBtnActive]}
+                    onPress={() => setIsTorchOn((t) => !t)}
+                  >
+                    <Ionicons
+                      name={isTorchOn ? 'flash' : 'flash-off'}
+                      size={15}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.torchToggleBtnText}>
+                      {isTorchOn ? 'Flash ON' : 'Flash'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.cameraAimText}>
+                  Point camera at passenger's digital ticket QR code
+                </Text>
+              </View>
+            )}
+
+            {/* Quick Test Scan Buttons for Immediate Testing */}
             <View style={styles.simulateScanSection}>
-              <Text style={styles.simulateScanTitle}>Test Scan Active Passenger Tickets:</Text>
+              <Text style={styles.simulateScanTitle}>Test Scan Passenger Tickets:</Text>
               <View style={styles.simulateButtonsGrid}>
                 {activeStopPassengers.map((p) => (
                   <TouchableOpacity
@@ -1352,7 +1483,7 @@ Thank you for choosing PNG Express! Safe travels.`;
                     Arrived at {activeStop.name}
                   </Text>
                   <Text style={styles.modalHeaderSub}>
-                    Within 50m of stop • Check in passengers below
+                    Check in passengers boarding at this stop below
                   </Text>
                 </View>
               </View>
@@ -1425,8 +1556,8 @@ Thank you for choosing PNG Express! Safe travels.`;
                 setShowArrivalModal(false);
                 tripSyncStore.departStop(activeStop.id);
                 Alert.alert(
-                  'Stop Departed',
-                  `${activeStop.name} completed. Next stop is now active and synced with Driver.`
+                  'Stop Completed',
+                  `${activeStop.name} completed. Now en route to next pickup stop.`
                 );
               }}
               activeOpacity={0.85}
@@ -1573,37 +1704,6 @@ const styles = StyleSheet.create({
   },
 
   // Page 1: Calendar Elements
-  weekNoticeCard: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 12,
-  },
-  weekNoticeIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekNoticeTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0369A1',
-  },
-  weekNoticeSub: {
-    fontSize: 11,
-    color: '#0284C7',
-    marginTop: 2,
-    lineHeight: 15,
-  },
   weekCarouselScroll: {
     width: '100%',
     marginBottom: 14,
@@ -2126,6 +2226,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     marginBottom: 16,
+    overflow: 'hidden',
     shadowColor: '#000000',
     shadowOpacity: 0.04,
     shadowOffset: { width: 0, height: 2 },
@@ -2146,7 +2247,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   nextPickupPlaceTitleScreenshot: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
     color: '#0F172A',
     marginTop: 2,
@@ -2154,10 +2255,10 @@ const styles = StyleSheet.create({
   within50mBadgeScreenshot: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: '#F0FDF4',
     paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#86EFAC',
@@ -2166,6 +2267,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#047857',
+  },
+  enRoutePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  enRoutePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
   },
   passengersToPickRow: {
     flexDirection: 'row',
@@ -2263,22 +2380,63 @@ const styles = StyleSheet.create({
   btnCheckInTextScreenshotBoarded: {
     color: '#FFFFFF',
   },
+
+  // Stop Depart Ready Banner
+  stopDepartReadyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginTop: 8,
+  },
+  stopDepartReadyTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  stopDepartReadySub: {
+    fontSize: 10,
+    color: '#047857',
+    marginTop: 1,
+  },
+  btnDepartStopNext: {
+    backgroundColor: '#059669',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  btnDepartStopNextText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  // FIXED: Button stays 100% inside container with zero overflow
   btnOpenArrivalCheckInScreenshot: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: '#F0F9FF',
     borderWidth: 1.5,
     borderColor: '#BAE6FD',
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginTop: 12,
+    alignSelf: 'stretch',
+    overflow: 'hidden',
   },
   btnOpenArrivalCheckInTextScreenshot: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: '#006FD8',
+    flexShrink: 1,
+    textAlign: 'center',
   },
 
   // Ticket Verification Section in Page 2
@@ -2333,9 +2491,51 @@ const styles = StyleSheet.create({
   verifyTabBtnTextActive: {
     color: '#006FD8',
   },
+
+  // Camera Permission Box
+  cameraPermissionBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  cameraPermissionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 8,
+  },
+  cameraPermissionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 14,
+    lineHeight: 15,
+  },
+  btnGrantCamera: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#006FD8',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  btnGrantCameraText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // Camera Live Viewfinder
   cameraViewfinderBox: {
-    height: 170,
-    backgroundColor: '#0F172A',
+    height: 190,
+    backgroundColor: '#000000',
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2360,16 +2560,46 @@ const styles = StyleSheet.create({
     height: 20,
     borderColor: '#006FD8',
   },
-  cornerTL: { top: 14, left: 14, borderTopWidth: 3, borderLeftWidth: 3 },
-  cornerTR: { top: 14, right: 14, borderTopWidth: 3, borderRightWidth: 3 },
-  cornerBL: { bottom: 14, left: 14, borderBottomWidth: 3, borderLeftWidth: 3 },
-  cornerBR: { bottom: 14, right: 14, borderBottomWidth: 3, borderRightWidth: 3 },
-  cameraAimText: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 8,
+  cornerTL: { top: 12, left: 12, borderTopWidth: 3, borderLeftWidth: 3 },
+  cornerTR: { top: 12, right: 12, borderTopWidth: 3, borderRightWidth: 3 },
+  cornerBL: { bottom: 12, left: 12, borderBottomWidth: 3, borderLeftWidth: 3 },
+  cornerBR: { bottom: 12, right: 12, borderBottomWidth: 3, borderRightWidth: 3 },
+  cameraControlsOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    gap: 6,
   },
+  torchToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  torchToggleBtnActive: {
+    backgroundColor: '#006FD8',
+  },
+  torchToggleBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  cameraAimText: {
+    position: 'absolute',
+    bottom: 10,
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+
   simulateScanSection: {
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
@@ -2403,6 +2633,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#006FD8',
   },
+
+  // Scan Result Card
   scanResultCard: {
     backgroundColor: '#F0FDF4',
     borderRadius: 12,
@@ -2559,10 +2791,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
-  boldSeatText: {
-    color: '#006FD8',
-    fontWeight: '900',
-  },
   btnLookupCheckIn: {
     backgroundColor: '#EFF6FF',
     paddingVertical: 6,
@@ -2617,15 +2845,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 14,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: 10,
   },
   arrivalModalCard: {
     width: '100%',
@@ -2690,36 +2909,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
     marginTop: 2,
-  },
-  btnCallSmall: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  btnCheckInToggle: {
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  btnCheckInToggleBoarded: {
-    backgroundColor: '#10B981',
-    borderColor: '#059669',
-  },
-  btnCheckInToggleText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#006FD8',
-  },
-  btnCheckInToggleTextBoarded: {
-    color: '#FFFFFF',
   },
   btnCompletePickupAndDepart: {
     flexDirection: 'row',

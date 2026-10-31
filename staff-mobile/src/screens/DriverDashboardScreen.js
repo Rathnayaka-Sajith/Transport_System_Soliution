@@ -11,7 +11,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { MOCK_PASSENGERS } from '../data/mockDatabase';
 import { tripSyncStore } from '../data/tripSyncStore';
@@ -426,7 +426,7 @@ export default function DriverDashboardScreen({ user }) {
             onPress={launchGoogleMapsNavigation}
             activeOpacity={0.8}
           >
-            <Ionicons name="map" size={15} color="#006FD8" />
+            <MaterialCommunityIcons name="google-maps" size={17} color="#006FD8" />
             <Text style={styles.openExternalMapsText}>Open Map</Text>
           </TouchableOpacity>
         </View>

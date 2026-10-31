@@ -305,6 +305,14 @@ export const tripSyncStore = {
       state.activeStopId = 'jaffna';
     }
 
+    // Bus departs and is now in-transit to the next stop; not within 50m until it reaches the next stop
+    state.isWithin50m = false;
+
+    notifyListeners();
+  },
+
+  arriveAtStop() {
+    state.isWithin50m = true;
     notifyListeners();
   },
 
