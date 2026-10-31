@@ -490,19 +490,6 @@ Thank you for choosing PNG Express! Safe travels.`;
           </View>
         </TouchableOpacity>
 
-        {/* Instruction Banner */}
-        <View style={styles.weekNoticeCard}>
-          <View style={styles.weekNoticeIconCircle}>
-            <Ionicons name="calendar" size={18} color="#006FD8" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.weekNoticeTitle}>Tap Any Date to Open Bus Seating</Text>
-            <Text style={styles.weekNoticeSub}>
-              Only the active operational week ({formatDisplayDate(weekStart)} –{' '}
-              {formatDisplayDate(weekEnd)}) is unlocked. Tap any active date to view seating & reserve seats pendingly.
-            </Text>
-          </View>
-        </View>
 
         {/* Fast Current Week Carousel */}
         <ScrollView
