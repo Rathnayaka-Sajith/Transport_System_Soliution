@@ -14,6 +14,7 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { MOCK_PASSENGERS } from '../data/mockDatabase';
+import { tripSyncStore } from '../data/tripSyncStore';
 
 // Initial Route Stops Configuration
 const INITIAL_STOPS = [
@@ -107,8 +108,17 @@ export default function DriverDashboardScreen({ user }) {
   const [showBusDetailsModal, setShowBusDetailsModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [isTripStarted, setIsTripStarted] = useState(false);
-  const [stops, setStops] = useState(INITIAL_STOPS);
-  const [passengersList, setPassengersList] = useState(MOCK_PASSENGERS);
+  const [stops, setStops] = useState(tripSyncStore.getState().stops);
+  const [passengersList, setPassengersList] = useState(tripSyncStore.getState().passengers);
+
+  // Real-time synchronization with Conductor's phone
+  useEffect(() => {
+    const unsubscribe = tripSyncStore.subscribe((state) => {
+      setPassengersList([...state.passengers]);
+      setStops([...state.stops]);
+    });
+    return unsubscribe;
+  }, []);
 
   // Live GPS tracking states
   const [driverCoords, setDriverCoords] = useState(null);
@@ -232,19 +242,8 @@ export default function DriverDashboardScreen({ user }) {
       return;
     }
 
-    setPassengersList((prev) =>
-      prev.map((p) => {
-        if (p.ticketRef === ticketRef) {
-          const newStatus = p.status === 'BOARDED' ? 'PENDING' : 'BOARDED';
-          return {
-            ...p,
-            status: newStatus,
-            boardedAt: newStatus === 'BOARDED' ? formatHoursMinutes(new Date()) : null,
-          };
-        }
-        return p;
-      })
-    );
+    const driverName = user?.name ? `Driver ${user.name.split(' ')[0]}` : 'Driver Sunil';
+    tripSyncStore.checkInPassenger(ticketRef, driverName);
   };
 
   // Depart / Pass stop:
@@ -256,36 +255,7 @@ export default function DriverDashboardScreen({ user }) {
     const departingStop = stops.find((s) => s.id === stopId);
     const stopName = departingStop ? departingStop.name : 'Stop';
 
-    // 1. Update passengers: any un-boarded passenger at this stop misses the trip
-    setPassengersList((prev) =>
-      prev.map((p) => {
-        if (p.stopId === stopId) {
-          if (p.status === 'PENDING') {
-            return { ...p, status: 'MISSED' };
-          }
-        }
-        return p;
-      })
-    );
-
-    // 2. Mark this stop as PASSED and activate the next upcoming stop
-    setStops((prevStops) => {
-      const updated = prevStops.map((s) => {
-        if (s.id === stopId) {
-          return { ...s, status: 'PASSED' };
-        }
-        return s;
-      });
-
-      // Find the next non-passed stop and make it ACTIVE
-      const nextNonPassed = updated.find((s) => s.status !== 'PASSED');
-      if (nextNonPassed) {
-        return updated.map((s) =>
-          s.id === nextNonPassed.id ? { ...s, status: 'ACTIVE' } : s
-        );
-      }
-      return updated;
-    });
+    tripSyncStore.departStop(stopId);
 
     Alert.alert(
       'Pickup Completed',
@@ -386,6 +356,7 @@ export default function DriverDashboardScreen({ user }) {
   // Start Trip: Activate mobile GPS & trigger Google Maps multi-stop navigation
   const handleStartTripWithGps = async () => {
     setIsTripStarted(true);
+    tripSyncStore.setTripStarted(true);
     await startLiveGpsTracking();
     launchGoogleMapsNavigation();
   };
@@ -407,6 +378,7 @@ export default function DriverDashboardScreen({ user }) {
             }
             setGpsStatus('STANDBY');
             setIsTripStarted(false);
+            tripSyncStore.setTripStarted(false);
           },
         },
       ]

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -12,8 +12,10 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  Animated,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { tripSyncStore } from '../data/tripSyncStore';
 
 // PNG Express Official Bank Account Details
 const PNG_BANK_ACCOUNT = {
@@ -98,120 +100,125 @@ const sendWhatsAppMessage = async (phone, message) => {
   }
 };
 
-// Initial Mock Reservations (Seeded on Today: 2026-10-31)
-const INITIAL_RESERVATIONS = [
-  {
-    id: 'RES-8812',
-    ticketRef: null,
-    customerName: 'Chaminda Senanayake',
-    phone: '076 554 9911',
-    dateKey: '2026-10-31',
-    seats: [21, 22],
-    pickup: 'Anuradhapura Stand',
-    amount: 4800,
-    status: 'PENDING_PAYMENT', // 'PENDING_PAYMENT' | 'CONFIRMED'
-    createdAt: '10:15 AM',
-    bankRef: null,
-  },
-  {
-    id: 'RES-8815',
-    ticketRef: null,
-    customerName: 'V. Ramanathan',
-    phone: '077 341 8820',
-    dateKey: '2026-10-31',
-    seats: [6, 7],
-    pickup: 'Thalawa Junction',
-    amount: 4800,
-    status: 'PENDING_PAYMENT',
-    createdAt: '09:40 AM',
-    bankRef: null,
-  },
-  {
-    id: 'RES-8701',
-    ticketRef: 'PNG-TKT-1081',
-    customerName: 'Kasun Bandara',
-    phone: '077 123 9081',
-    dateKey: '2026-10-31',
-    seats: [1, 2],
-    pickup: 'Thambuththegama Central Depot',
-    amount: 4800,
-    status: 'CONFIRMED',
-    createdAt: 'Yesterday',
-    bankRef: 'Commercial Bank Slip #CB-9941',
-  },
-  {
-    id: 'RES-8702',
-    ticketRef: 'PNG-TKT-1082',
-    customerName: 'Mohamed Rizwan',
-    phone: '077 665 4433',
-    dateKey: '2026-10-31',
-    seats: [12, 13],
-    pickup: 'Thambuththegama Central Depot',
-    amount: 4800,
-    status: 'CONFIRMED',
-    createdAt: 'Yesterday',
-    bankRef: 'Bank of Ceylon Slip #BOC-1029',
-  },
-  {
-    id: 'RES-8703',
-    ticketRef: 'PNG-TKT-1083',
-    customerName: 'Sithara Fernando',
-    phone: '071 883 1920',
-    dateKey: '2026-10-31',
-    seats: [5],
-    pickup: 'Thalawa Junction',
-    amount: 2400,
-    status: 'CONFIRMED',
-    createdAt: 'Yesterday',
-    bankRef: 'Commercial Bank Slip #CB-8832',
-  },
-];
-
 export default function ConductorDashboardScreen({ user }) {
-  // Current local system time
+  // Page state: 'calendar' (FIRST PAGE) | 'check_tickets' (SECOND PAGE ON BUTTON CLICK)
+  const [currentPage, setCurrentPage] = useState('calendar');
+
+  // Shared trip state from real-time sync store
+  const [tripState, setTripState] = useState(tripSyncStore.getState());
+
+  useEffect(() => {
+    const unsubscribe = tripSyncStore.subscribe((newState) => {
+      setTripState({ ...newState });
+    });
+    return unsubscribe;
+  }, []);
+
+  const {
+    isTripStarted,
+    busPlate,
+    routeNo,
+    stops,
+    passengers,
+    activeStopId,
+    isWithin50m,
+  } = tripState;
+
+  // Active stop object
+  const activeStop = useMemo(() => {
+    return (
+      stops.find((s) => s.id === activeStopId) ||
+      stops.find((s) => s.status === 'ACTIVE') ||
+      stops[0]
+    );
+  }, [stops, activeStopId]);
+
+  // Passengers to be picked up at the active stop
+  const activeStopPassengers = useMemo(() => {
+    return passengers.filter((p) => p.stopId === activeStop?.id);
+  }, [passengers, activeStop?.id]);
+
+  // -------------------------------------------------------------
+  // PAGE 1 STATE: CALENDAR & BUS SEATING MODAL
+  // -------------------------------------------------------------
   const today = useMemo(() => new Date('2026-10-31T10:00:00'), []);
   const { monday: weekStart, sunday: weekEnd } = useMemo(() => getWeekBounds(today), [today]);
-
-  // Selected date defaults to today
   const [selectedDate, setSelectedDate] = useState(today);
-
-  // Calendar month/year navigation state
-  const [calendarMonth, setCalendarMonth] = useState(today.getMonth()); // 0-11
+  const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
   const [calendarYear, setCalendarYear] = useState(today.getFullYear());
 
-  // Master Reservations State
-  const [reservations, setReservations] = useState(INITIAL_RESERVATIONS);
-
-  // POP-UP WINDOW 1: Bus Seating Layout & Reservation Modal
+  // Bus Seating Modal State (Opens on day click)
   const [showBusSeatingModal, setShowBusSeatingModal] = useState(false);
   const [selectedSeatsForBooking, setSelectedSeatsForBooking] = useState([]);
   const [callerName, setCallerName] = useState('');
   const [callerPhone, setCallerPhone] = useState('');
   const [callerPickup, setCallerPickup] = useState('Thambuththegama Central Depot');
   const [isSubmittingReserve, setIsSubmittingReserve] = useState(false);
-
-  // Detail Inspector for an already booked/pending seat
   const [inspectedSeatReservation, setInspectedSeatReservation] = useState(null);
 
-  // POP-UP WINDOW 2: Verify Payment & Confirm Permanently
+  // Verify Payment Modal in Calendar
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [activePendingToVerify, setActivePendingToVerify] = useState(null);
   const [bankSlipRef, setBankSlipRef] = useState('');
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
 
-  // POP-UP WINDOW 3: Digital Ticket QR Pass
+  // Digital Ticket QR Pass Modal
   const [showQrModal, setShowQrModal] = useState(false);
   const [activeConfirmedRes, setActiveConfirmedRes] = useState(null);
 
-  // Check if a date falls strictly within the current unlocked operational week
+  // -------------------------------------------------------------
+  // PAGE 2 STATE: TICKET CHECKER & ARRIVAL POPUP
+  // -------------------------------------------------------------
+  const [verifyTab, setVerifyTab] = useState('QR'); // 'QR' | 'PHONE'
+  const [searchPhoneQuery, setSearchPhoneQuery] = useState('');
+  const [scannedTicketResult, setScannedTicketResult] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+
+  // Automatic Arrival Check-In Popup (< 50m of pickup place)
+  const [showArrivalModal, setShowArrivalModal] = useState(false);
+  const autoArrivalOpenedRef = useRef({});
+
+  // Animated laser beam for QR scanner preview
+  const laserAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (currentPage === 'check_tickets' && verifyTab === 'QR') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(laserAnim, {
+            toValue: 1,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(laserAnim, {
+            toValue: 0,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [currentPage, verifyTab]);
+
+  // Automatically open arrival check-in popup window when bus arrives within 50m
+  useEffect(() => {
+    if (isTripStarted && isWithin50m && activeStop && activeStop.type === 'PICKUP') {
+      if (!autoArrivalOpenedRef.current[activeStop.id]) {
+        autoArrivalOpenedRef.current[activeStop.id] = true;
+        setShowArrivalModal(true);
+      }
+    }
+  }, [isTripStarted, isWithin50m, activeStop?.id]);
+
+  // Check if date is strictly in current active operational week
   const isDateUnlocked = (testDate) => {
     const t = new Date(testDate).setHours(12, 0, 0, 0);
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
 
-  // -------------------------------------------------------------
-  // CALENDAR CELL CLICK: DIRECTLY OPEN BUS SEATING POPUP WINDOW
-  // -------------------------------------------------------------
+  const selectedDateKey = formatDateKey(selectedDate);
+
+  // Tap day in calendar: opens bus seating modal directly
   const handleDayClick = (dayDate, unlocked) => {
     if (!unlocked) {
       Alert.alert(
@@ -222,8 +229,6 @@ export default function ConductorDashboardScreen({ user }) {
       );
       return;
     }
-
-    // Set selected date and immediately open bus seating popup window!
     setSelectedDate(dayDate);
     setSelectedSeatsForBooking([]);
     setCallerName('');
@@ -232,68 +237,41 @@ export default function ConductorDashboardScreen({ user }) {
     setShowBusSeatingModal(true);
   };
 
-  // Selected date key
-  const selectedDateKey = formatDateKey(selectedDate);
-
-  // Get seat info for the selected date (1 to 40)
+  // Seat status lookup for calendar modal
   const getSeatInfoForDate = (seatNum) => {
-    // 1. Is this seat currently selected for a new booking by the conductor?
     if (selectedSeatsForBooking.includes(seatNum)) {
-      return {
-        seatNumber: seatNum,
-        status: 'SELECTED',
-        reservation: null,
-      };
+      return { seatNumber: seatNum, status: 'SELECTED', reservation: null };
     }
-
-    // 2. Is this seat already booked/reserved on this date?
-    const foundRes = reservations.find(
-      (r) => r.dateKey === selectedDateKey && (r.seats || []).includes(seatNum)
+    const found = passengers.find(
+      (p) => (p.seats || []).includes(seatNum)
     );
-
-    if (foundRes) {
+    if (found) {
       return {
         seatNumber: seatNum,
-        status: foundRes.status, // 'PENDING_PAYMENT' | 'CONFIRMED'
-        reservation: foundRes,
+        status: found.paymentStatus === 'PAID' ? 'CONFIRMED' : 'PENDING_PAYMENT',
+        reservation: found,
       };
     }
-
-    // 3. Otherwise, vacant / available
-    return {
-      seatNumber: seatNum,
-      status: 'AVAILABLE',
-      reservation: null,
-    };
+    return { seatNumber: seatNum, status: 'AVAILABLE', reservation: null };
   };
 
-  // Toggle seat selection on the bus map
+  // Handle seat click in bus seating modal
   const handleSeatPress = (seatNum) => {
     const info = getSeatInfoForDate(seatNum);
-
     if (info.status === 'AVAILABLE') {
-      // Toggle into selectedSeatsForBooking
       setInspectedSeatReservation(null);
       setSelectedSeatsForBooking((prev) =>
         prev.includes(seatNum) ? prev.filter((s) => s !== seatNum) : [...prev, seatNum].sort((a, b) => a - b)
       );
     } else if (info.status === 'SELECTED') {
-      // Remove from selection
       setSelectedSeatsForBooking((prev) => prev.filter((s) => s !== seatNum));
-    } else if (info.status === 'PENDING_PAYMENT') {
-      // Inspect pending reservation
-      setSelectedSeatsForBooking([]);
-      setInspectedSeatReservation(info.reservation);
-    } else if (info.status === 'CONFIRMED') {
-      // Inspect confirmed reservation
+    } else {
       setSelectedSeatsForBooking([]);
       setInspectedSeatReservation(info.reservation);
     }
   };
 
-  // -------------------------------------------------------------
-  // SUBMIT PENDING RESERVATION & SEND WHATSAPP TO INPUT NUMBER
-  // -------------------------------------------------------------
+  // Reserve seats pendingly and dispatch WhatsApp with bank details
   const handleConfirmPendingReserve = async () => {
     if (selectedSeatsForBooking.length === 0) {
       Alert.alert('Select Seats', 'Please tap one or more vacant seats on the bus layout.');
@@ -309,28 +287,28 @@ export default function ConductorDashboardScreen({ user }) {
     }
 
     setIsSubmittingReserve(true);
-
     const totalSeats = selectedSeatsForBooking.length;
     const totalAmount = totalSeats * FARE_PER_SEAT;
     const resId = `RES-${Math.floor(8820 + Math.random() * 900)}`;
 
-    const newReservation = {
-      id: resId,
-      ticketRef: null,
-      customerName: callerName.trim(),
+    const newTicket = {
+      ticketRef: resId,
+      stopId: activeStop.id,
+      name: callerName.trim(),
       phone: callerPhone.trim(),
-      dateKey: selectedDateKey,
       seats: [...selectedSeatsForBooking],
-      pickup: callerPickup,
-      amount: totalAmount,
-      status: 'PENDING_PAYMENT',
-      createdAt: 'Just now',
-      bankRef: null,
+      boardingPoint: callerPickup,
+      destination: 'Jaffna',
+      fareRs: totalAmount,
+      paymentStatus: 'PENDING',
+      status: 'PENDING',
+      boardedAt: null,
+      checkedInBy: null,
     };
 
-    setReservations((prev) => [newReservation, ...prev]);
+    // Add into shared sync store
+    tripSyncStore.markPassengerBoardedDirect(newTicket.ticketRef, 'Conductor');
 
-    // Prepare Official WhatsApp Message with PNG Bank Details
     const waMessage = `🚌 *PNG EXPRESS - SEAT RESERVATION (PENDING PAYMENT)*
 
 Dear ${callerName.trim()},
@@ -338,7 +316,7 @@ Your provisional seat reservation has been recorded by Conductor ${user?.name ||
 
 📋 *Reservation Details:*
 • Ref Number: *${resId}*
-• Travel Date: *${formatDisplayDate(selectedDate)}*
+• Date of Travel: *${formatDisplayDate(selectedDate)}*
 • Reserved Seats: *Seats ${selectedSeatsForBooking.join(', ')}* (${totalSeats} Seat${totalSeats > 1 ? 's' : ''})
 • Boarding Place: *${callerPickup}*
 • Total Amount Due: *LKR ${totalAmount.toLocaleString()}*
@@ -358,12 +336,10 @@ Thank you for choosing PNG Express! Safe travels.`;
     const bookedPhone = callerPhone.trim();
     const bookedSeats = [...selectedSeatsForBooking];
 
-    // Clear inputs and selection
     setSelectedSeatsForBooking([]);
     setCallerName('');
     setCallerPhone('');
 
-    // Open WhatsApp directly to the customer's phone number
     Alert.alert(
       'Pending Reservation Saved',
       `Seats ${bookedSeats.join(', ')} marked as Pending. Opening WhatsApp now to send PNG bank details to ${bookedPhone}...`,
@@ -376,83 +352,31 @@ Thank you for choosing PNG Express! Safe travels.`;
     );
   };
 
-  // -------------------------------------------------------------
-  // VERIFY PAYMENT & PERMANENTLY RESERVE (DISPATCH QR VIA WHATSAPP)
-  // -------------------------------------------------------------
-  const handleInitiatePaymentVerification = (res) => {
-    setActivePendingToVerify(res);
-    setBankSlipRef(`Slip #CB-${Math.floor(1000 + Math.random() * 9000)}`);
-    setShowVerifyModal(true);
+  // Toggle passenger boarding (Synchronizes to Driver instantly in real-time)
+  const handleToggleBoarding = (ticketRef) => {
+    const conductorName = user?.name ? `Conductor ${user.name.split(' ')[0]}` : 'Conductor Nimal';
+    tripSyncStore.checkInPassenger(ticketRef, conductorName);
   };
 
-  const handleConfirmPermanentBooking = async () => {
-    if (!activePendingToVerify) return;
-
-    setIsVerifyingPayment(true);
-    const generatedTicketRef = `PNG-TKT-${Math.floor(2000 + Math.random() * 8000)}`;
-    const verifiedSlip = bankSlipRef.trim() || 'Direct Online Transfer Verified';
-
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === activePendingToVerify.id
-          ? {
-              ...r,
-              status: 'CONFIRMED',
-              ticketRef: generatedTicketRef,
-              bankRef: verifiedSlip,
-            }
-          : r
-      )
-    );
-
-    const verifiedRes = {
-      ...activePendingToVerify,
-      status: 'CONFIRMED',
-      ticketRef: generatedTicketRef,
-      bankRef: verifiedSlip,
-    };
-
-    setShowVerifyModal(false);
-    setIsVerifyingPayment(false);
-    setInspectedSeatReservation(verifiedRes);
-
-    // Prepare WhatsApp Message with Confirmed Ticket and Digital QR Pass Link
-    const qrPassUrl = `https://pngexpress.lk/ticket/${generatedTicketRef}`;
-    const waTicketMessage = `✅ *PNG EXPRESS - OFFICIAL CONFIRMED TICKET & QR PASS*
-
-Dear ${activePendingToVerify.customerName},
-Your payment of *LKR ${activePendingToVerify.amount.toLocaleString()}* has been *VERIFIED* by the bus conductor! Your seats are now *PERMANENTLY RESERVED*.
-
-🎫 *Official Digital Ticket Pass:*
-• Ticket Number: *${generatedTicketRef}*
-• Passenger: *${activePendingToVerify.customerName}*
-• Date of Travel: *${formatDisplayDate(selectedDate)}*
-• Route: *Route 87 (Thambuththegama ➔ Jaffna)*
-• Bus Plate: *NB-4592 (Scania Luxury Touring)*
-• Confirmed Seats: *Seats ${activePendingToVerify.seats.join(', ')}*
-• Boarding Location: *${activePendingToVerify.pickup}*
-• Verification: *PAID & VERIFIED (${verifiedSlip})*
-
-📲 *Your Digital Ticket & QR Code Pass:*
-${qrPassUrl}
-
-Please show this digital ticket / QR pass to the bus crew when boarding. Have a safe and pleasant journey with PNG Express!`;
-
-    Alert.alert(
-      'Payment Verified & Seats Confirmed',
-      `Ticket ${generatedTicketRef} issued. Opening WhatsApp now to send the official QR Pass to ${activePendingToVerify.phone}...`,
-      [
-        {
-          text: 'Send QR Pass via WhatsApp ➔',
-          onPress: () => {
-            sendWhatsAppMessage(activePendingToVerify.phone, waTicketMessage);
-            setActiveConfirmedRes(verifiedRes);
-            setShowQrModal(true);
-          },
-        },
-      ]
-    );
+  const handleCallPassenger = (phone, name) => {
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+    const url = `tel:${cleanPhone}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Phone Call', `Dialing ${name} at ${phone}`);
+    });
   };
+
+  // Filter passengers by search query (for phone number or name lookup)
+  const filteredLookupPassengers = useMemo(() => {
+    const q = searchPhoneQuery.trim().toLowerCase();
+    if (!q) return passengers;
+    return passengers.filter(
+      (p) =>
+        p.phone.replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, '')) ||
+        p.name.toLowerCase().includes(q) ||
+        p.ticketRef.toLowerCase().includes(q)
+    );
+  }, [passengers, searchPhoneQuery]);
 
   // Fast Week Days (7 Unlocked Days)
   const currentWeekDays = useMemo(() => {
@@ -464,10 +388,6 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
       const isSelected = formatDateKey(selectedDate) === key;
       const isTodayDate = formatDateKey(today) === key;
 
-      const dayBookings = reservations.filter((r) => r.dateKey === key);
-      const pendingCount = dayBookings.filter((r) => r.status === 'PENDING_PAYMENT').length;
-      const confirmedCount = dayBookings.filter((r) => r.status === 'CONFIRMED').length;
-
       days.push({
         date: cur,
         key,
@@ -475,14 +395,12 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
         dayNum: cur.getDate(),
         isTodayDate,
         isSelected,
-        pendingCount,
-        confirmedCount,
       });
 
       temp.setDate(temp.getDate() + 1);
     }
     return days;
-  }, [weekStart, selectedDate, today, reservations]);
+  }, [weekStart, selectedDate, today]);
 
   // Full Month Matrix
   const calendarMatrix = useMemo(() => {
@@ -504,10 +422,6 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
       const isTodayDate = formatDateKey(today) === dateKey;
       const isSelected = formatDateKey(selectedDate) === dateKey;
 
-      const dayBookings = reservations.filter((r) => r.dateKey === dateKey);
-      const hasPending = dayBookings.some((r) => r.status === 'PENDING_PAYMENT');
-      const hasConfirmed = dayBookings.some((r) => r.status === 'CONFIRMED');
-
       cells.push({
         empty: false,
         id: `day-${dateKey}`,
@@ -517,8 +431,6 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
         unlocked,
         isTodayDate,
         isSelected,
-        hasPending,
-        hasConfirmed,
       });
     }
 
@@ -530,839 +442,1011 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
     }
 
     return cells;
-  }, [calendarYear, calendarMonth, today, selectedDate, reservations, weekStart, weekEnd]);
+  }, [calendarYear, calendarMonth, today, selectedDate, weekStart, weekEnd]);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
-  return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      {/* 1. Header Bar */}
-      <View style={styles.topProfileBar}>
-        <View style={styles.profileBadgeCol}>
-          <Text style={styles.roleTitle}>Conductor Desk</Text>
-          <Text style={styles.conductorNameText}>
-            {user?.name || 'Nimal Silva'} • Badge #{user?.conductorDetails?.badgeNo || 'COND-WP-9920'}
-          </Text>
+  // =============================================================
+  // VIEW 1: FIRST PAGE (CALENDAR & BUS SEATING PAGE)
+  // =============================================================
+  if (currentPage === 'calendar') {
+    return (
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header: Conductor on - Bus Number & Route Number */}
+        <View style={styles.headerBar}>
+          <View style={styles.headerLeftCol}>
+            <Text style={styles.headerConductorTitle}>Conductor on - {busPlate}</Text>
+            <Text style={styles.headerSubRouteText}>Route 87</Text>
+          </View>
+
+          <View style={styles.tripStatusPill}>
+            <View style={styles.livePulseDot} />
+            <Text style={styles.tripStatusPillText}>Trip Started</Text>
+          </View>
         </View>
 
-        <View style={styles.busRouteTag}>
-          <Ionicons name="bus" size={13} color="#006FD8" />
-          <Text style={styles.busRouteTagText}>NB-4592 • Route 87</Text>
-        </View>
-      </View>
+        {/* DRIVER HAS STARTED TRIP: CLICK HERE TO CHECK TICKETS BUTTON */}
+        <TouchableOpacity
+          style={styles.btnCheckTicketsCard}
+          onPress={() => setCurrentPage('check_tickets')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.ticketIconCircle}>
+            <Ionicons name="qr-code-outline" size={26} color="#FFFFFF" />
+          </View>
 
-      {/* 2. Instruction Banner */}
-      <View style={styles.weekNoticeCard}>
-        <View style={styles.weekNoticeIconCircle}>
-          <Ionicons name="calendar" size={18} color="#006FD8" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.weekNoticeTitle}>Tap Any Date to Open Bus Seating</Text>
-          <Text style={styles.weekNoticeSub}>
-            Only the active operational week ({formatDisplayDate(weekStart)} –{' '}
-            {formatDisplayDate(weekEnd)}) is unlocked. Tap any active date to view seating & reserve seats pendingly.
-          </Text>
-        </View>
-      </View>
-
-      {/* 3. Fast Current Week Carousel */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.weekCarouselContent}
-        style={styles.weekCarouselScroll}
-      >
-        {currentWeekDays.map((item) => (
-          <TouchableOpacity
-            key={item.key}
-            style={[
-              styles.weekDayPill,
-              item.isSelected && styles.weekDayPillSelected,
-              item.isTodayDate && styles.weekDayPillToday,
-            ]}
-            onPress={() => handleDayClick(item.date, true)}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.weekDayNameText,
-                item.isSelected && styles.weekDayNameTextSelected,
-              ]}
-            >
-              {item.dayName}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.btnCheckTicketsTitle}>Click Here To Check Tickets</Text>
+            <Text style={styles.btnCheckTicketsSub}>
+              Driver has started the trip • Scan QR or verify by phone number
             </Text>
-            <Text
-              style={[
-                styles.weekDayNumText,
-                item.isSelected && styles.weekDayNumTextSelected,
-              ]}
-            >
-              {item.dayNum}
+          </View>
+
+          <View style={styles.chevronCircle}>
+            <Feather name="chevron-right" size={20} color="#006FD8" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Instruction Banner */}
+        <View style={styles.weekNoticeCard}>
+          <View style={styles.weekNoticeIconCircle}>
+            <Ionicons name="calendar" size={18} color="#006FD8" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.weekNoticeTitle}>Tap Any Date to Open Bus Seating</Text>
+            <Text style={styles.weekNoticeSub}>
+              Only the active operational week ({formatDisplayDate(weekStart)} –{' '}
+              {formatDisplayDate(weekEnd)}) is unlocked. Tap any active date to view seating & reserve seats pendingly.
             </Text>
+          </View>
+        </View>
 
-            {item.pendingCount > 0 ? (
-              <View style={styles.miniPendingDot}>
-                <Text style={styles.miniPendingDotText}>{item.pendingCount}</Text>
-              </View>
-            ) : item.confirmedCount > 0 ? (
-              <View style={styles.miniConfirmedDot} />
-            ) : null}
-
-            {item.isTodayDate && (
+        {/* Fast Current Week Carousel */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.weekCarouselContent}
+          style={styles.weekCarouselScroll}
+        >
+          {currentWeekDays.map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.weekDayPill,
+                item.isSelected && styles.weekDayPillSelected,
+                item.isTodayDate && styles.weekDayPillToday,
+              ]}
+              onPress={() => handleDayClick(item.date, true)}
+              activeOpacity={0.8}
+            >
               <Text
                 style={[
-                  styles.miniTodayLabel,
-                  item.isSelected && styles.miniTodayLabelSelected,
+                  styles.weekDayNameText,
+                  item.isSelected && styles.weekDayNameTextSelected,
                 ]}
               >
-                Today
+                {item.dayName}
               </Text>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* 4. Full Month Interactive Calendar */}
-      <View style={styles.calendarCard}>
-        <View style={styles.calendarHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="calendar-outline" size={18} color="#006FD8" />
-            <Text style={styles.calendarMonthTitle}>
-              {monthNames[calendarMonth]} {calendarYear}
-            </Text>
-          </View>
-
-          <View style={styles.monthNavControls}>
-            <TouchableOpacity
-              style={styles.monthNavBtn}
-              onPress={() => {
-                if (calendarMonth === 0) {
-                  setCalendarMonth(11);
-                  setCalendarYear((y) => y - 1);
-                } else {
-                  setCalendarMonth((m) => m - 1);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Feather name="chevron-left" size={18} color="#0F172A" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.monthNavBtn}
-              onPress={() => {
-                if (calendarMonth === 11) {
-                  setCalendarMonth(0);
-                  setCalendarYear((y) => y + 1);
-                } else {
-                  setCalendarMonth((m) => m + 1);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Feather name="chevron-right" size={18} color="#0F172A" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Weekday Columns */}
-        <View style={styles.weekdayRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-            <Text key={day} style={styles.weekdayColText}>
-              {day}
-            </Text>
-          ))}
-        </View>
-
-        {/* Calendar Days Matrix */}
-        <View style={styles.daysGrid}>
-          {calendarMatrix.map((cell) => {
-            if (cell.empty) {
-              return <View key={cell.id} style={styles.emptyDayCell} />;
-            }
-
-            return (
-              <TouchableOpacity
-                key={cell.id}
+              <Text
                 style={[
-                  styles.dayCell,
-                  !cell.unlocked && styles.dayCellLocked,
-                  cell.unlocked && styles.dayCellUnlocked,
-                  cell.isSelected && styles.dayCellSelected,
-                  cell.isTodayDate && !cell.isSelected && styles.dayCellTodayBorder,
+                  styles.weekDayNumText,
+                  item.isSelected && styles.weekDayNumTextSelected,
                 ]}
-                onPress={() => handleDayClick(cell.date, cell.unlocked)}
-                activeOpacity={cell.unlocked ? 0.75 : 0.9}
               >
+                {item.dayNum}
+              </Text>
+              {item.isTodayDate && (
                 <Text
                   style={[
-                    styles.dayCellText,
-                    !cell.unlocked && styles.dayCellTextLocked,
-                    cell.unlocked && styles.dayCellTextUnlocked,
-                    cell.isSelected && styles.dayCellTextSelected,
+                    styles.miniTodayLabel,
+                    item.isSelected && styles.miniTodayLabelSelected,
                   ]}
                 >
-                  {cell.dayNumber}
+                  Today
                 </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-                {!cell.unlocked ? (
-                  <View style={styles.lockedMiniIcon}>
-                    <Ionicons name="lock-closed" size={9} color="#94A3B8" />
-                  </View>
-                ) : (
-                  <View style={styles.dayDotRow}>
-                    {cell.hasPending && <View style={styles.pendingDotMini} />}
-                    {cell.hasConfirmed && <View style={styles.confirmedDotMini} />}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Legend */}
-        <View style={styles.calendarLegendRow}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSquare, { backgroundColor: '#FFFFFF', borderColor: '#006FD8', borderWidth: 1.5 }]} />
-            <Text style={styles.legendLabel}>Active (Tap to Open Bus)</Text>
-          </View>
-
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSquare, { backgroundColor: '#F1F5F9' }]} />
-            <Text style={styles.legendLabel}>Locked Days</Text>
-          </View>
-
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
-            <Text style={styles.legendLabel}>Pending Reserve</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* 5. Selected Day Direct Action Box */}
-      <View style={styles.dateActionCard}>
-        <View style={styles.dateActionTopRow}>
-          <View>
-            <Text style={styles.selectedDateHeadline}>
-              {formatDisplayDate(selectedDate)}
-            </Text>
-            <Text style={styles.selectedDateSub}>
-              Route 87: Thambuththegama ➔ Jaffna (Bus NB-4592)
-            </Text>
-          </View>
-
-          {/* Large prominent button to open Bus Seating Window directly */}
-          <TouchableOpacity
-            style={styles.btnOpenBusSeating}
-            onPress={() => {
-              setSelectedSeatsForBooking([]);
-              setCallerName('');
-              setCallerPhone('');
-              setInspectedSeatReservation(null);
-              setShowBusSeatingModal(true);
-            }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="bus" size={16} color="#FFFFFF" />
-            <Text style={styles.btnOpenBusSeatingText}>Open Bus Seating</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ============================================================= */}
-      {/* POP-UP WINDOW: BUS SEATING & CALL-IN PENDING RESERVATION       */}
-      {/* ============================================================= */}
-      <Modal
-        visible={showBusSeatingModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowBusSeatingModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowBusSeatingModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.busModalCard}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={styles.modalBusIconCircle}>
-                  <Ionicons name="bus" size={20} color="#006FD8" />
-                </View>
-                <View>
-                  <Text style={styles.modalHeaderTitle}>
-                    Bus Seating • {formatDisplayDate(selectedDate)}
-                  </Text>
-                  <Text style={styles.modalHeaderSub}>
-                    Coach NB-4592 • Tap vacant seats to reserve pendingly
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setShowBusSeatingModal(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Feather name="x" size={22} color="#64748B" />
-              </TouchableOpacity>
+        {/* Full Month Interactive Calendar */}
+        <View style={styles.calendarCard}>
+          <View style={styles.calendarHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="calendar-outline" size={18} color="#006FD8" />
+              <Text style={styles.calendarMonthTitle}>
+                {monthNames[calendarMonth]} {calendarYear}
+              </Text>
             </View>
 
-            {/* Scrollable Bus Interior Layout & Form */}
-            <ScrollView
-              style={{ maxHeight: 520 }}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            >
-              {/* Color Legend */}
-              <View style={styles.busLegendRow}>
-                <View style={styles.busLegendItem}>
-                  <View style={[styles.seatLegendBox, styles.seatLegendAvailable]} />
-                  <Text style={styles.busLegendLabel}>Vacant</Text>
-                </View>
+            <View style={styles.monthNavControls}>
+              <TouchableOpacity
+                style={styles.monthNavBtn}
+                onPress={() => {
+                  if (calendarMonth === 0) {
+                    setCalendarMonth(11);
+                    setCalendarYear((y) => y - 1);
+                  } else {
+                    setCalendarMonth((m) => m - 1);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="chevron-left" size={18} color="#0F172A" />
+              </TouchableOpacity>
 
-                <View style={styles.busLegendItem}>
-                  <View style={[styles.seatLegendBox, styles.seatLegendSelected]} />
-                  <Text style={styles.busLegendLabel}>Selected</Text>
-                </View>
+              <TouchableOpacity
+                style={styles.monthNavBtn}
+                onPress={() => {
+                  if (calendarMonth === 11) {
+                    setCalendarMonth(0);
+                    setCalendarYear((y) => y + 1);
+                  } else {
+                    setCalendarMonth((m) => m + 1);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="chevron-right" size={18} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-                <View style={styles.busLegendItem}>
-                  <View style={[styles.seatLegendBox, styles.seatLegendPending]} />
-                  <Text style={styles.busLegendLabel}>Pending Slip</Text>
-                </View>
+          <View style={styles.weekdayRow}>
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+              <Text key={day} style={styles.weekdayColText}>
+                {day}
+              </Text>
+            ))}
+          </View>
 
-                <View style={styles.busLegendItem}>
-                  <View style={[styles.seatLegendBox, styles.seatLegendConfirmed]} />
-                  <Text style={styles.busLegendLabel}>Confirmed</Text>
-                </View>
-              </View>
+          <View style={styles.daysGrid}>
+            {calendarMatrix.map((cell) => {
+              if (cell.empty) {
+                return <View key={cell.id} style={styles.emptyDayCell} />;
+              }
 
-              {/* Front Cabin Banner */}
-              <View style={styles.frontCabinBanner}>
-                <Ionicons name="shield-checkmark" size={14} color="#64748B" />
-                <Text style={styles.frontCabinText}>FRONT • DRIVER CABIN & DOOR</Text>
-              </View>
+              return (
+                <TouchableOpacity
+                  key={cell.id}
+                  style={[
+                    styles.dayCell,
+                    !cell.unlocked && styles.dayCellLocked,
+                    cell.unlocked && styles.dayCellUnlocked,
+                    cell.isSelected && styles.dayCellSelected,
+                    cell.isTodayDate && !cell.isSelected && styles.dayCellTodayBorder,
+                  ]}
+                  onPress={() => handleDayClick(cell.date, cell.unlocked)}
+                  activeOpacity={cell.unlocked ? 0.75 : 0.9}
+                >
+                  <Text
+                    style={[
+                      styles.dayCellText,
+                      !cell.unlocked && styles.dayCellTextLocked,
+                      cell.unlocked && styles.dayCellTextUnlocked,
+                      cell.isSelected && styles.dayCellTextSelected,
+                    ]}
+                  >
+                    {cell.dayNumber}
+                  </Text>
 
-              {/* 40-Seat Coach Layout (10 Rows × 4 Seats: Left Pair, Aisle, Right Pair) */}
-              <View style={styles.busCoachBody}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rowIdx) => {
-                  const s1 = (rowIdx - 1) * 4 + 1;
-                  const s2 = (rowIdx - 1) * 4 + 2;
-                  const s3 = (rowIdx - 1) * 4 + 3;
-                  const s4 = (rowIdx - 1) * 4 + 4;
-
-                  const renderSeatBtn = (seatNum) => {
-                    const info = getSeatInfoForDate(seatNum);
-                    const isAvailable = info.status === 'AVAILABLE';
-                    const isSelected = info.status === 'SELECTED';
-                    const isPending = info.status === 'PENDING_PAYMENT';
-                    const isConfirmed = info.status === 'CONFIRMED';
-
-                    return (
-                      <TouchableOpacity
-                        key={seatNum}
-                        style={[
-                          styles.seatItem,
-                          isAvailable && styles.seatAvailable,
-                          isSelected && styles.seatSelected,
-                          isPending && styles.seatPending,
-                          isConfirmed && styles.seatConfirmed,
-                        ]}
-                        onPress={() => handleSeatPress(seatNum)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.seatNumberText,
-                            isSelected && styles.seatNumberTextWhite,
-                            isPending && styles.seatNumberTextPending,
-                            isConfirmed && styles.seatNumberTextConfirmed,
-                          ]}
-                        >
-                          {seatNum}
-                        </Text>
-                        {isSelected && <Text style={styles.seatMiniBadge}>✓</Text>}
-                        {isPending && <Text style={styles.seatMiniBadge}>⏳</Text>}
-                        {isConfirmed && <Text style={styles.seatMiniBadge}>★</Text>}
-                      </TouchableOpacity>
-                    );
-                  };
-
-                  return (
-                    <View key={rowIdx} style={styles.seatRow}>
-                      {/* Left Pair (Window & Aisle) */}
-                      <View style={styles.seatPair}>
-                        {renderSeatBtn(s1)}
-                        {renderSeatBtn(s2)}
-                      </View>
-
-                      {/* Walking Aisle */}
-                      <View style={styles.aisleGap}>
-                        <Text style={styles.aisleText}>{rowIdx}</Text>
-                      </View>
-
-                      {/* Right Pair (Aisle & Window) */}
-                      <View style={styles.seatPair}>
-                        {renderSeatBtn(s3)}
-                        {renderSeatBtn(s4)}
-                      </View>
+                  {!cell.unlocked && (
+                    <View style={styles.lockedMiniIcon}>
+                      <Ionicons name="lock-closed" size={9} color="#94A3B8" />
                     </View>
-                  );
-                })}
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.calendarLegendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSquare, { backgroundColor: '#FFFFFF', borderColor: '#006FD8', borderWidth: 1.5 }]} />
+              <Text style={styles.legendLabel}>Active (Tap to Open Bus)</Text>
+            </View>
+
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSquare, { backgroundColor: '#F1F5F9' }]} />
+              <Text style={styles.legendLabel}>Locked Days</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Selected Day Direct Action Box */}
+        <View style={styles.dateActionCard}>
+          <View style={styles.dateActionTopRow}>
+            <View>
+              <Text style={styles.selectedDateHeadline}>
+                {formatDisplayDate(selectedDate)}
+              </Text>
+              <Text style={styles.selectedDateSub}>
+                Route 87: Thambuththegama ➔ Jaffna (Bus NB-4592)
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.btnOpenBusSeating}
+              onPress={() => {
+                setSelectedSeatsForBooking([]);
+                setCallerName('');
+                setCallerPhone('');
+                setInspectedSeatReservation(null);
+                setShowBusSeatingModal(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="bus" size={16} color="#FFFFFF" />
+              <Text style={styles.btnOpenBusSeatingText}>Open Bus Seating</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ============================================================= */}
+        {/* POP-UP WINDOW: BUS SEATING & CALL-IN PENDING RESERVATION       */}
+        {/* ============================================================= */}
+        <Modal
+          visible={showBusSeatingModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowBusSeatingModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowBusSeatingModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.busModalCard}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={styles.modalBusIconCircle}>
+                    <Ionicons name="bus" size={20} color="#006FD8" />
+                  </View>
+                  <View>
+                    <Text style={styles.modalHeaderTitle}>
+                      Bus Seating • {formatDisplayDate(selectedDate)}
+                    </Text>
+                    <Text style={styles.modalHeaderSub}>
+                      Coach NB-4592 • Tap vacant seats to reserve pendingly
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setShowBusSeatingModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Feather name="x" size={22} color="#64748B" />
+                </TouchableOpacity>
               </View>
 
-              {/* SECTION A: WHEN CONDUCTOR SELECTS SEATS -> SHOW CUSTOMER INFO FORM */}
-              {selectedSeatsForBooking.length > 0 && (
-                <View style={styles.reservationFormBox}>
-                  <View style={styles.reservationFormHeader}>
-                    <Ionicons name="create-outline" size={18} color="#006FD8" />
-                    <Text style={styles.reservationFormTitle}>
-                      Reserve Seats: {selectedSeatsForBooking.join(', ')} ({selectedSeatsForBooking.length} Seat{selectedSeatsForBooking.length > 1 ? 's' : ''})
-                    </Text>
+              <ScrollView
+                style={{ maxHeight: 520 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                {/* Color Legend */}
+                <View style={styles.busLegendRow}>
+                  <View style={styles.busLegendItem}>
+                    <View style={[styles.seatLegendBox, styles.seatLegendAvailable]} />
+                    <Text style={styles.busLegendLabel}>Vacant</Text>
                   </View>
-
-                  {/* Customer / Caller Name */}
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Customer / Caller Name *</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="e.g. Sanjeewa Wickramasinghe"
-                      placeholderTextColor="#94A3B8"
-                      value={callerName}
-                      onChangeText={setCallerName}
-                    />
+                  <View style={styles.busLegendItem}>
+                    <View style={[styles.seatLegendBox, styles.seatLegendSelected]} />
+                    <Text style={styles.busLegendLabel}>Selected</Text>
                   </View>
-
-                  {/* WhatsApp Mobile Number */}
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>WhatsApp Mobile Number *</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="e.g. 077 892 1144"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="phone-pad"
-                      value={callerPhone}
-                      onChangeText={setCallerPhone}
-                    />
-                    <Text style={styles.inputHelpText}>
-                      PNG bank account details will be sent automatically to this WhatsApp number.
-                    </Text>
+                  <View style={styles.busLegendItem}>
+                    <View style={[styles.seatLegendBox, styles.seatLegendPending]} />
+                    <Text style={styles.busLegendLabel}>Pending Slip</Text>
                   </View>
+                  <View style={styles.busLegendItem}>
+                    <View style={[styles.seatLegendBox, styles.seatLegendConfirmed]} />
+                    <Text style={styles.busLegendLabel}>Confirmed</Text>
+                  </View>
+                </View>
 
-                  {/* Boarding Point */}
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Boarding / Pickup Stop</Text>
-                    <View style={styles.pickupPillsGrid}>
-                      {[
-                        'Thambuththegama Central Depot',
-                        'Thalawa Junction',
-                        'Anuradhapura Stand',
-                        'Vavuniya Rest Stop',
-                      ].map((stop) => (
+                {/* Front Cabin Banner */}
+                <View style={styles.frontCabinBanner}>
+                  <Ionicons name="shield-checkmark" size={14} color="#64748B" />
+                  <Text style={styles.frontCabinText}>FRONT • DRIVER CABIN & DOOR</Text>
+                </View>
+
+                {/* 40-Seat Coach Layout */}
+                <View style={styles.busCoachBody}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rowIdx) => {
+                    const s1 = (rowIdx - 1) * 4 + 1;
+                    const s2 = (rowIdx - 1) * 4 + 2;
+                    const s3 = (rowIdx - 1) * 4 + 3;
+                    const s4 = (rowIdx - 1) * 4 + 4;
+
+                    const renderSeatBtn = (seatNum) => {
+                      const info = getSeatInfoForDate(seatNum);
+                      const isAvailable = info.status === 'AVAILABLE';
+                      const isSelected = info.status === 'SELECTED';
+                      const isPending = info.status === 'PENDING_PAYMENT';
+                      const isConfirmed = info.status === 'CONFIRMED';
+
+                      return (
                         <TouchableOpacity
-                          key={stop}
+                          key={seatNum}
                           style={[
-                            styles.pickupPill,
-                            callerPickup === stop && styles.pickupPillActive,
+                            styles.seatItem,
+                            isAvailable && styles.seatAvailable,
+                            isSelected && styles.seatSelected,
+                            isPending && styles.seatPending,
+                            isConfirmed && styles.seatConfirmed,
                           ]}
-                          onPress={() => setCallerPickup(stop)}
+                          onPress={() => handleSeatPress(seatNum)}
+                          activeOpacity={0.7}
                         >
                           <Text
                             style={[
-                              styles.pickupPillText,
-                              callerPickup === stop && styles.pickupPillTextActive,
+                              styles.seatNumberText,
+                              isSelected && styles.seatNumberTextWhite,
+                              isPending && styles.seatNumberTextPending,
+                              isConfirmed && styles.seatNumberTextConfirmed,
                             ]}
                           >
-                            {stop}
+                            {seatNum}
                           </Text>
+                          {isSelected && <Text style={styles.seatMiniBadge}>✓</Text>}
+                          {isPending && <Text style={styles.seatMiniBadge}>⏳</Text>}
+                          {isConfirmed && <Text style={styles.seatMiniBadge}>★</Text>}
                         </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
+                      );
+                    };
 
-                  {/* Fare Summary */}
-                  <View style={styles.fareNoticeRow}>
-                    <View>
-                      <Text style={styles.fareNoticeLabel}>Total Amount Due:</Text>
-                      <Text style={styles.fareNoticeValue}>
-                        LKR {(selectedSeatsForBooking.length * FARE_PER_SEAT).toLocaleString()}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.fareNoticeSub}>
-                      LKR 2,400 × {selectedSeatsForBooking.length}
-                    </Text>
-                  </View>
-
-                  {/* SUBMIT BUTTON: CONFIRM PENDING & SEND WHATSAPP */}
-                  <TouchableOpacity
-                    style={styles.btnConfirmReserveMain}
-                    onPress={handleConfirmPendingReserve}
-                    disabled={isSubmittingReserve}
-                    activeOpacity={0.85}
-                  >
-                    {isSubmittingReserve ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
-                    )}
-                    <Text style={styles.btnConfirmReserveMainText}>
-                      Reserve Seats Pendingly & Send WhatsApp ➔
-                    </Text>
-                  </TouchableOpacity>
+                    return (
+                      <View key={rowIdx} style={styles.seatRow}>
+                        <View style={styles.seatPair}>
+                          {renderSeatBtn(s1)}
+                          {renderSeatBtn(s2)}
+                        </View>
+                        <View style={styles.aisleGap}>
+                          <Text style={styles.aisleText}>{rowIdx}</Text>
+                        </View>
+                        <View style={styles.seatPair}>
+                          {renderSeatBtn(s3)}
+                          {renderSeatBtn(s4)}
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
-              )}
 
-              {/* SECTION B: WHEN CONDUCTOR TAPS AN EXISTING BOOKED / PENDING SEAT */}
-              {inspectedSeatReservation && selectedSeatsForBooking.length === 0 && (
-                <View
-                  style={[
-                    styles.inspectedSeatCard,
-                    inspectedSeatReservation.status === 'PENDING_PAYMENT'
-                      ? styles.inspectedSeatCardPending
-                      : styles.inspectedSeatCardConfirmed,
-                  ]}
-                >
-                  <View style={styles.inspectedTopRow}>
-                    <View>
-                      <Text style={styles.inspectedName}>
-                        {inspectedSeatReservation.customerName}
-                      </Text>
-                      <Text style={styles.inspectedSub}>
-                        📞 {inspectedSeatReservation.phone} • {inspectedSeatReservation.pickup}
-                      </Text>
-                      <Text style={styles.inspectedSeats}>
-                        Seats: {inspectedSeatReservation.seats.join(', ')} • Fare: LKR{' '}
-                        {inspectedSeatReservation.amount.toLocaleString()}
+                {/* WHEN CONDUCTOR SELECTS SEATS -> SHOW FORM */}
+                {selectedSeatsForBooking.length > 0 && (
+                  <View style={styles.reservationFormBox}>
+                    <View style={styles.reservationFormHeader}>
+                      <Ionicons name="create-outline" size={18} color="#006FD8" />
+                      <Text style={styles.reservationFormTitle}>
+                        Reserve Seats: {selectedSeatsForBooking.join(', ')} ({selectedSeatsForBooking.length} Seat{selectedSeatsForBooking.length > 1 ? 's' : ''})
                       </Text>
                     </View>
 
-                    <View
-                      style={[
-                        styles.inspectedBadge,
-                        inspectedSeatReservation.status === 'PENDING_PAYMENT'
-                          ? styles.badgePending
-                          : styles.badgeConfirmed,
-                      ]}
+                    <View style={styles.formGroup}>
+                      <Text style={styles.formLabel}>Customer / Caller Name *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="e.g. Sanjeewa Wickramasinghe"
+                        placeholderTextColor="#94A3B8"
+                        value={callerName}
+                        onChangeText={setCallerName}
+                      />
+                    </View>
+
+                    <View style={styles.formGroup}>
+                      <Text style={styles.formLabel}>WhatsApp Mobile Number *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="e.g. 077 892 1144"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="phone-pad"
+                        value={callerPhone}
+                        onChangeText={setCallerPhone}
+                      />
+                      <Text style={styles.inputHelpText}>
+                        PNG bank account details will be sent automatically to this WhatsApp number.
+                      </Text>
+                    </View>
+
+                    <View style={styles.formGroup}>
+                      <Text style={styles.formLabel}>Boarding / Pickup Stop</Text>
+                      <View style={styles.pickupPillsGrid}>
+                        {[
+                          'Thambuththegama Central Depot',
+                          'Thalawa Junction',
+                          'Anuradhapura Stand',
+                          'Vavuniya Rest Stop',
+                        ].map((stop) => (
+                          <TouchableOpacity
+                            key={stop}
+                            style={[
+                              styles.pickupPill,
+                              callerPickup === stop && styles.pickupPillActive,
+                            ]}
+                            onPress={() => setCallerPickup(stop)}
+                          >
+                            <Text
+                              style={[
+                                styles.pickupPillText,
+                                callerPickup === stop && styles.pickupPillTextActive,
+                              ]}
+                            >
+                              {stop}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    <View style={styles.fareNoticeRow}>
+                      <View>
+                        <Text style={styles.fareNoticeLabel}>Total Amount Due:</Text>
+                        <Text style={styles.fareNoticeValue}>
+                          LKR {(selectedSeatsForBooking.length * FARE_PER_SEAT).toLocaleString()}
+                        </Text>
+                      </View>
+                      <Text style={styles.fareNoticeSub}>
+                        LKR 2,400 × {selectedSeatsForBooking.length}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.btnConfirmReserveMain}
+                      onPress={handleConfirmPendingReserve}
+                      disabled={isSubmittingReserve}
+                      activeOpacity={0.85}
                     >
-                      <Text
-                        style={
-                          inspectedSeatReservation.status === 'PENDING_PAYMENT'
-                            ? styles.badgePendingText
-                            : styles.badgeConfirmedText
-                        }
-                      >
-                        {inspectedSeatReservation.status === 'PENDING_PAYMENT'
-                          ? 'Pending Slip'
-                          : 'Permanently Reserved'}
+                      {isSubmittingReserve ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
+                      )}
+                      <Text style={styles.btnConfirmReserveMainText}>
+                        Reserve Seats Pendingly & Send WhatsApp ➔
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
+                )}
 
-                  {/* Actions for this inspected reservation */}
-                  {inspectedSeatReservation.status === 'PENDING_PAYMENT' ? (
-                    <View style={styles.inspectedActionsRow}>
-                      <TouchableOpacity
-                        style={styles.btnSecondaryWa}
-                        onPress={() => {
-                          const msg = `🚌 *PNG EXPRESS - BANK DETAILS REMINDER*
-
-Dear ${inspectedSeatReservation.customerName},
-Please transfer LKR ${inspectedSeatReservation.amount.toLocaleString()} to our Commercial Bank Account (1000 8492 8821, PNG Express Pvt Ltd) to confirm your Seats ${inspectedSeatReservation.seats.join(
-                            ', '
-                          )}. Reply with slip to get your digital QR ticket.`;
-                          sendWhatsAppMessage(inspectedSeatReservation.phone, msg);
-                        }}
-                      >
-                        <Ionicons name="logo-whatsapp" size={14} color="#006FD8" />
-                        <Text style={styles.btnSecondaryWaText}>Re-send Bank Info</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.btnPrimaryVerify}
-                        onPress={() =>
-                          handleInitiatePaymentVerification(inspectedSeatReservation)
-                        }
-                      >
-                        <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" />
-                        <Text style={styles.btnPrimaryVerifyText}>Verify & Permanent Reserve</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.inspectedActionsRow}>
-                      <TouchableOpacity
-                        style={styles.btnViewQrSmall}
-                        onPress={() => {
-                          setActiveConfirmedRes(inspectedSeatReservation);
-                          setShowQrModal(true);
-                        }}
-                      >
-                        <Ionicons name="qr-code" size={14} color="#006FD8" />
-                        <Text style={styles.btnViewQrSmallText}>View Ticket QR</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.btnShareQrWa}
-                        onPress={() => {
-                          const passMsg = `✅ *PNG EXPRESS - CONFIRMED TICKET QR PASS*
-
-Dear ${inspectedSeatReservation.customerName},
-Your confirmed ticket for ${formatDisplayDate(selectedDate)}:
-• Ticket: *${inspectedSeatReservation.ticketRef}*
-• Seats: *Seats ${inspectedSeatReservation.seats.join(', ')}*
-• Digital QR Ticket: https://pngexpress.lk/ticket/${inspectedSeatReservation.ticketRef}`;
-                          sendWhatsAppMessage(inspectedSeatReservation.phone, passMsg);
-                        }}
-                      >
-                        <Ionicons name="share-social" size={14} color="#059669" />
-                        <Text style={styles.btnShareQrWaText}>Send QR to WhatsApp</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Friendly empty selection hint */}
-              {selectedSeatsForBooking.length === 0 && !inspectedSeatReservation && (
-                <View style={styles.tapToSelectHintBox}>
-                  <Ionicons name="hand-left-outline" size={18} color="#64748B" />
-                  <Text style={styles.tapToSelectHintText}>
-                    Tap any vacant seat above to select and reserve for a customer caller.
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ============================================================= */}
-      {/* POP-UP WINDOW 2: VERIFY PAYMENT & PERMANENTLY RESERVE (QR)     */}
-      {/* ============================================================= */}
-      <Modal
-        visible={showVerifyModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowVerifyModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowVerifyModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalCard}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={[styles.modalBusIconCircle, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                  <Ionicons name="checkmark-done" size={18} color="#059669" />
-                </View>
-                <View>
-                  <Text style={styles.modalHeaderTitle}>Verify Payment & Confirm</Text>
-                  <Text style={styles.modalHeaderSub}>Permanent reserve & send QR code</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setShowVerifyModal(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Feather name="x" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {activePendingToVerify && (
-              <View style={styles.verificationCardContent}>
-                <View style={styles.verifyCustomerBox}>
-                  <Text style={styles.verifyCustomerName}>
-                    {activePendingToVerify.customerName}
-                  </Text>
-                  <Text style={styles.verifyCustomerSub}>
-                    WhatsApp: {activePendingToVerify.phone} • Date: {formatDisplayDate(selectedDate)}
-                  </Text>
-                  <Text style={styles.verifySeatsText}>
-                    Seats: {activePendingToVerify.seats.join(', ')} • Pickup: {activePendingToVerify.pickup}
-                  </Text>
-                </View>
-
-                <View style={styles.verifyAmountBox}>
-                  <Text style={styles.verifyAmountLabel}>Payment Amount Verified:</Text>
-                  <Text style={styles.verifyAmountNumber}>
-                    LKR {activePendingToVerify.amount.toLocaleString()}
-                  </Text>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Bank Slip / Receipt Reference</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. Commercial Bank Slip #CB-9912"
-                    placeholderTextColor="#94A3B8"
-                    value={bankSlipRef}
-                    onChangeText={setBankSlipRef}
-                  />
-                </View>
-
-                <View style={styles.qrDispatchNotice}>
-                  <Ionicons name="qr-code" size={18} color="#006FD8" />
-                  <Text style={styles.qrDispatchNoticeText}>
-                    Clicking confirm will permanently lock these seats and automatically dispatch
-                    the official Digital Ticket QR Pass to the customer via WhatsApp.
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.btnConfirmPaymentMain}
-              onPress={handleConfirmPermanentBooking}
-              disabled={isVerifyingPayment}
-              activeOpacity={0.85}
-            >
-              {isVerifyingPayment ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
-              )}
-              <Text style={styles.btnConfirmPaymentMainText}>
-                Confirm Permanent Reserve & Send QR Code ➔
-              </Text>
+                {selectedSeatsForBooking.length === 0 && !inspectedSeatReservation && (
+                  <View style={styles.tapToSelectHintBox}>
+                    <Ionicons name="hand-left-outline" size={18} color="#64748B" />
+                    <Text style={styles.tapToSelectHintText}>
+                      Tap any vacant seat above to select and reserve for a customer caller.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
             </TouchableOpacity>
           </TouchableOpacity>
+        </Modal>
+      </ScrollView>
+    );
+  }
+
+  // =============================================================
+  // VIEW 2: SECOND PAGE (TICKET CHECKER & NEXT PICKUPS)
+  // =============================================================
+  return (
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header with Back to Calendar Button */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          style={styles.btnBackToCalendar}
+          onPress={() => setCurrentPage('calendar')}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={18} color="#0F172A" />
+          <Text style={styles.btnBackToCalendarText}>Calendar</Text>
         </TouchableOpacity>
-      </Modal>
+
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerConductorTitle}>Conductor on - {busPlate}</Text>
+          <Text style={styles.headerSubRouteText}>Route 87</Text>
+        </View>
+
+        <View style={styles.tripStatusPill}>
+          <View style={styles.livePulseDot} />
+          <Text style={styles.tripStatusPillText}>In-Transit</Text>
+        </View>
+      </View>
+
+      {/* SECTION 1: NEXT PICKUP PLACE CARD (MATCHING USER SCREENSHOT) */}
+      <View style={styles.nextPickupCardScreenshot}>
+        <View style={styles.nextPickupTopScreenshot}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={styles.locationPinCircle}>
+              <Ionicons name="location-sharp" size={20} color="#006FD8" />
+            </View>
+            <View>
+              <Text style={styles.nextPickupLabelScreenshot}>Next Pickup Place</Text>
+              <Text style={styles.nextPickupPlaceTitleScreenshot}>{activeStop.name}</Text>
+            </View>
+          </View>
+
+          {isWithin50m && (
+            <View style={styles.within50mBadgeScreenshot}>
+              <View style={styles.livePulseDotGreen} />
+              <Text style={styles.within50mBadgeText}>Within 50m</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Sub-header: Passengers to Pick Up at this Stop */}
+        <View style={styles.passengersToPickRow}>
+          <Text style={styles.passengersToPickTitle}>
+            Passengers to Pick Up at this Stop:
+          </Text>
+          <Text style={styles.bookedCountBadgeScreenshot}>
+            {activeStopPassengers.length} Booked
+          </Text>
+        </View>
+
+        {/* Passenger Cards Matching User Screenshot Exactly */}
+        {activeStopPassengers.map((p) => {
+          const isBoarded = p.status === 'BOARDED';
+          return (
+            <View key={p.ticketRef} style={styles.passengerRowScreenshot}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.passengerNameScreenshot}>{p.name}</Text>
+                  <View
+                    style={[
+                      styles.waitingTagScreenshot,
+                      isBoarded && styles.boardedTagScreenshot,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.waitingTagTextScreenshot,
+                        isBoarded && styles.boardedTagTextScreenshot,
+                      ]}
+                    >
+                      {isBoarded ? '✓ Boarded' : '⏳ Waiting'}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.passengerDetailSubScreenshot}>
+                  Seats: <Text style={styles.boldSeatTextScreenshot}>{p.seats.join(', ')}</Text> •{' '}
+                  {p.destination} • Fare:{' '}
+                  <Text style={styles.farePaidGreenScreenshot}>
+                    Rs. {p.fareRs.toLocaleString()} ({p.paymentStatus})
+                  </Text>
+                </Text>
+
+                {p.boardedAt && (
+                  <Text style={styles.syncAttributionText}>
+                    Checked in at {p.boardedAt} {p.checkedInBy ? `• ${p.checkedInBy}` : ''}
+                  </Text>
+                )}
+              </View>
+
+              {/* Call Button */}
+              <TouchableOpacity
+                style={styles.callCircleBtnScreenshot}
+                onPress={() => handleCallPassenger(p.phone, p.name)}
+                activeOpacity={0.7}
+              >
+                <Feather name="phone" size={15} color="#006FD8" />
+              </TouchableOpacity>
+
+              {/* Check In Button */}
+              <TouchableOpacity
+                style={[
+                  styles.btnCheckInScreenshot,
+                  isBoarded && styles.btnCheckInScreenshotBoarded,
+                ]}
+                onPress={() => handleToggleBoarding(p.ticketRef)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.btnCheckInTextScreenshot,
+                    isBoarded && styles.btnCheckInTextScreenshotBoarded,
+                  ]}
+                >
+                  {isBoarded ? '✓ Boarded' : 'Check In'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+
+        {/* Open Arrival Check-In Window Button Matching Screenshot */}
+        <TouchableOpacity
+          style={styles.btnOpenArrivalCheckInScreenshot}
+          onPress={() => setShowArrivalModal(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkbox-outline" size={18} color="#006FD8" />
+          <Text style={styles.btnOpenArrivalCheckInTextScreenshot}>
+            Open Arrival Check-In Window ({activeStop.name})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* SECTION 2: TICKET VERIFICATION (CAMERA QR SCANNER & PHONE NUMBER LOOKUP) */}
+      <View style={styles.ticketVerificationSection}>
+        <View style={styles.ticketSectionTitleRow}>
+          <Ionicons name="shield-checkmark" size={18} color="#006FD8" />
+          <Text style={styles.ticketSectionTitle}>Verify & Check Passenger Tickets</Text>
+        </View>
+
+        {/* Verification Mode Tabs */}
+        <View style={styles.verifyTabsRow}>
+          <TouchableOpacity
+            style={[
+              styles.verifyTabBtn,
+              verifyTab === 'QR' && styles.verifyTabBtnActive,
+            ]}
+            onPress={() => setVerifyTab('QR')}
+          >
+            <Ionicons
+              name="camera"
+              size={15}
+              color={verifyTab === 'QR' ? '#006FD8' : '#64748B'}
+            />
+            <Text
+              style={[
+                styles.verifyTabBtnText,
+                verifyTab === 'QR' && styles.verifyTabBtnTextActive,
+              ]}
+            >
+              Scan QR Code
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.verifyTabBtn,
+              verifyTab === 'PHONE' && styles.verifyTabBtnActive,
+            ]}
+            onPress={() => setVerifyTab('PHONE')}
+          >
+            <Ionicons
+              name="call"
+              size={15}
+              color={verifyTab === 'PHONE' ? '#006FD8' : '#64748B'}
+            />
+            <Text
+              style={[
+                styles.verifyTabBtnText,
+                verifyTab === 'PHONE' && styles.verifyTabBtnTextActive,
+              ]}
+            >
+              Phone Lookup (No Phone)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* TAB 1: CAMERA QR CODE SCANNER */}
+        {verifyTab === 'QR' && (
+          <View>
+            <View style={styles.cameraViewfinderBox}>
+              <View style={[styles.cornerMark, styles.cornerTL]} />
+              <View style={[styles.cornerMark, styles.cornerTR]} />
+              <View style={[styles.cornerMark, styles.cornerBL]} />
+              <View style={[styles.cornerMark, styles.cornerBR]} />
+
+              <Animated.View
+                style={[
+                  styles.scanningLaserLine,
+                  {
+                    transform: [
+                      {
+                        translateY: laserAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 160],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+
+              <Ionicons name="qr-code-outline" size={70} color="rgba(255,255,255,0.3)" />
+              <Text style={styles.cameraAimText}>
+                Aim camera at passenger's digital ticket QR code
+              </Text>
+            </View>
+
+            {/* Quick Test Scan Buttons */}
+            <View style={styles.simulateScanSection}>
+              <Text style={styles.simulateScanTitle}>Test Scan Active Passenger Tickets:</Text>
+              <View style={styles.simulateButtonsGrid}>
+                {activeStopPassengers.map((p) => (
+                  <TouchableOpacity
+                    key={p.ticketRef}
+                    style={styles.simulateScanBtn}
+                    onPress={() => {
+                      setIsScanning(true);
+                      setTimeout(() => {
+                        setScannedTicketResult(p);
+                        setIsScanning(false);
+                      }, 400);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="barcode-outline" size={14} color="#006FD8" />
+                    <Text style={styles.simulateScanBtnText}>
+                      {p.name} ({p.ticketRef})
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Scanned Result Card */}
+            {scannedTicketResult && (
+              <View style={styles.scanResultCard}>
+                <View style={styles.scanResultHeader}>
+                  <View style={styles.verifiedGreenCircle}>
+                    <Ionicons name="checkmark-done" size={16} color="#059669" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.scanResultName}>{scannedTicketResult.name}</Text>
+                    <Text style={styles.scanResultRef}>
+                      Ticket #{scannedTicketResult.ticketRef}
+                    </Text>
+                  </View>
+                  <View style={styles.paidPillBadge}>
+                    <Text style={styles.paidPillBadgeText}>
+                      {scannedTicketResult.paymentStatus} (Rs.{' '}
+                      {scannedTicketResult.fareRs.toLocaleString()})
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.scanResultDetailsRow}>
+                  <Text style={styles.scanResultSeats}>
+                    Seats: {scannedTicketResult.seats.join(', ')}
+                  </Text>
+                  <Text style={styles.scanResultRoute}>
+                    {scannedTicketResult.boardingPoint} ➔ {scannedTicketResult.destination}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.btnConfirmScanBoard,
+                    scannedTicketResult.status === 'BOARDED' &&
+                      styles.btnConfirmScanBoardDone,
+                  ]}
+                  onPress={() => {
+                    handleToggleBoarding(scannedTicketResult.ticketRef);
+                    setScannedTicketResult((prev) => ({
+                      ...prev,
+                      status: prev.status === 'BOARDED' ? 'PENDING' : 'BOARDED',
+                    }));
+                  }}
+                >
+                  <Text style={styles.btnConfirmScanBoardText}>
+                    {scannedTicketResult.status === 'BOARDED'
+                      ? '✓ Verified & Boarded (Tap to Undo)'
+                      : 'Confirm & Board Passenger ➔'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* TAB 2: PHONE NUMBER LOOKUP (PEOPLES WITHOUT PHONE) */}
+        {verifyTab === 'PHONE' && (
+          <View>
+            <View style={styles.phoneSearchBox}>
+              <Ionicons name="search" size={16} color="#64748B" />
+              <TextInput
+                style={styles.phoneSearchInput}
+                placeholder="Enter booked phone number (e.g. 077 334 1122)..."
+                placeholderTextColor="#94A3B8"
+                keyboardType="phone-pad"
+                value={searchPhoneQuery}
+                onChangeText={setSearchPhoneQuery}
+              />
+              {searchPhoneQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchPhoneQuery('')}>
+                  <Feather name="x" size={16} color="#64748B" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={styles.lookupSubNotice}>
+              For passengers without a phone, ask their booked phone number to verify paid
+              status and check them in:
+            </Text>
+
+            {filteredLookupPassengers.map((p) => {
+              const isBoarded = p.status === 'BOARDED';
+              const isPaid = p.paymentStatus === 'PAID';
+
+              return (
+                <View key={p.ticketRef} style={styles.lookupPassengerCard}>
+                  <View style={styles.lookupCardTop}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.lookupPassengerName}>{p.name}</Text>
+                        <View
+                          style={[
+                            styles.lookupPaidBadge,
+                            isPaid ? styles.lookupPaidGreen : styles.lookupPaidAmber,
+                          ]}
+                        >
+                          <Text
+                            style={
+                              isPaid
+                                ? styles.lookupPaidGreenText
+                                : styles.lookupPaidAmberText
+                            }
+                          >
+                            {isPaid ? '✓ PAID' : '⚠️ PENDING PAYMENT'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.lookupPhoneText}>
+                        📞 Phone: <Text style={styles.boldText}>{p.phone}</Text>
+                      </Text>
+                      <Text style={styles.lookupSeatsText}>
+                        Seats: <Text style={styles.boldSeatText}>{p.seats.join(', ')}</Text> •{' '}
+                        {p.boardingPoint} • Total: Rs. {p.fareRs.toLocaleString()}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.btnLookupCheckIn,
+                        isBoarded && styles.btnLookupCheckInDone,
+                      ]}
+                      onPress={() => handleToggleBoarding(p.ticketRef)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.btnLookupCheckInText,
+                          isBoarded && styles.btnLookupCheckInDoneText,
+                        ]}
+                      >
+                        {isBoarded ? '✓ Boarded' : 'Check In'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {/* 2-Way Staff Sync Banner */}
+      <View style={styles.syncStatusFooterNotice}>
+        <Ionicons name="sync" size={15} color="#059669" />
+        <Text style={styles.syncStatusFooterText}>
+          Real-time synchronized with Driver's cockpit. Check-ins updated instantly on both phones.
+        </Text>
+      </View>
 
       {/* ============================================================= */}
-      {/* POP-UP WINDOW 3: VIEW OFFICIAL DIGITAL TICKET & QR CODE PASS  */}
+      {/* ARRIVAL POPUP MODAL (< 50m)                                   */}
       {/* ============================================================= */}
       <Modal
-        visible={showQrModal}
+        visible={showArrivalModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowQrModal(false)}
+        onRequestClose={() => setShowArrivalModal(false)}
       >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowQrModal(false)}
+          onPress={() => setShowArrivalModal(false)}
         >
           <TouchableOpacity
-            style={styles.modalCard}
+            style={styles.arrivalModalCard}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={styles.modalBusIconCircle}>
-                  <Ionicons name="qr-code" size={18} color="#006FD8" />
+                <View style={styles.arrivedIconPulseCircle}>
+                  <Ionicons name="location" size={20} color="#006FD8" />
                 </View>
                 <View>
-                  <Text style={styles.modalHeaderTitle}>Digital Ticket Pass</Text>
+                  <Text style={styles.modalHeaderTitle}>
+                    Arrived at {activeStop.name}
+                  </Text>
                   <Text style={styles.modalHeaderSub}>
-                    {activeConfirmedRes?.ticketRef || 'Official Ticket'}
+                    Within 50m of stop • Check in passengers below
                   </Text>
                 </View>
               </View>
 
               <TouchableOpacity
-                onPress={() => setShowQrModal(false)}
+                onPress={() => setShowArrivalModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Feather name="x" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            {activeConfirmedRes && (
-              <View style={styles.ticketCardContainer}>
-                <View style={styles.ticketVerifiedBanner}>
-                  <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                  <Text style={styles.ticketVerifiedBannerText}>
-                    PAID & PERMANENTLY RESERVED (CONDUCTOR VERIFIED)
-                  </Text>
-                </View>
+            <View style={styles.arrivalSyncNoticeBox}>
+              <Ionicons name="people" size={16} color="#006FD8" />
+              <Text style={styles.arrivalSyncNoticeText}>
+                Both Driver and Conductor can check in passengers. Changes show immediately on
+                each other's screen.
+              </Text>
+            </View>
 
-                {/* QR Code Image */}
-                <View style={styles.qrCodeWrapper}>
-                  <Image
-                    source={{
-                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://pngexpress.lk/ticket/${activeConfirmedRes.ticketRef}`,
-                    }}
-                    style={styles.qrCodeImage}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.qrPassTokenText}>{activeConfirmedRes.ticketRef}</Text>
-                </View>
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {activeStopPassengers.map((p) => {
+                const isBoarded = p.status === 'BOARDED';
+                return (
+                  <View key={p.ticketRef} style={styles.arrivalPassengerRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.arrivalPassengerName}>{p.name}</Text>
+                      <Text style={styles.arrivalPassengerSub}>
+                        Seats: {p.seats.join(', ')} • Phone: {p.phone}
+                      </Text>
+                      {p.boardedAt && (
+                        <Text style={styles.arrivalBoardedAt}>
+                          ✓ Boarded at {p.boardedAt} {p.checkedInBy ? `by ${p.checkedInBy}` : ''}
+                        </Text>
+                      )}
+                    </View>
 
-                {/* Info List */}
-                <View style={styles.ticketInfoList}>
-                  <View style={styles.ticketInfoRow}>
-                    <Text style={styles.ticketInfoLabel}>Passenger Name:</Text>
-                    <Text style={styles.ticketInfoValueBold}>
-                      {activeConfirmedRes.customerName}
-                    </Text>
+                    <TouchableOpacity
+                      style={styles.btnCallSmall}
+                      onPress={() => handleCallPassenger(p.phone, p.name)}
+                    >
+                      <Feather name="phone" size={13} color="#006FD8" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.btnCheckInToggle,
+                        isBoarded && styles.btnCheckInToggleBoarded,
+                      ]}
+                      onPress={() => handleToggleBoarding(p.ticketRef)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.btnCheckInToggleText,
+                          isBoarded && styles.btnCheckInToggleTextBoarded,
+                        ]}
+                      >
+                        {isBoarded ? '✓ Boarded' : 'Check In'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-
-                  <View style={styles.ticketInfoRow}>
-                    <Text style={styles.ticketInfoLabel}>Travel Date:</Text>
-                    <Text style={styles.ticketInfoValue}>
-                      {formatDisplayDate(selectedDate)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.ticketInfoRow}>
-                    <Text style={styles.ticketInfoLabel}>Assigned Seats:</Text>
-                    <Text style={styles.ticketInfoValueSeats}>
-                      Seats {activeConfirmedRes.seats.join(', ')}
-                    </Text>
-                  </View>
-
-                  <View style={styles.ticketInfoRow}>
-                    <Text style={styles.ticketInfoLabel}>Route & Bus:</Text>
-                    <Text style={styles.ticketInfoValue}>Route 87 • NB-4592</Text>
-                  </View>
-
-                  <View style={styles.ticketInfoRow}>
-                    <Text style={styles.ticketInfoLabel}>Pickup Location:</Text>
-                    <Text style={styles.ticketInfoValue}>{activeConfirmedRes.pickup}</Text>
-                  </View>
-                </View>
-              </View>
-            )}
+                );
+              })}
+            </ScrollView>
 
             <TouchableOpacity
-              style={styles.btnResendQrMain}
+              style={styles.btnCompletePickupAndDepart}
               onPress={() => {
-                if (!activeConfirmedRes) return;
-                const passMsg = `✅ *PNG EXPRESS - CONFIRMED TICKET & QR PASS*
-
-Dear ${activeConfirmedRes.customerName},
-Here is your official digital ticket:
-• Ticket Number: *${activeConfirmedRes.ticketRef}*
-• Travel Date: *${formatDisplayDate(selectedDate)}*
-• Confirmed Seats: *Seats ${activeConfirmedRes.seats.join(', ')}*
-• Pickup Location: *${activeConfirmedRes.pickup}*
-• Digital Ticket & QR Code: https://pngexpress.lk/ticket/${activeConfirmedRes.ticketRef}
-
-Please show this digital ticket / QR pass to the conductor during boarding. Safe travels!`;
-                sendWhatsAppMessage(activeConfirmedRes.phone, passMsg);
+                setShowArrivalModal(false);
+                tripSyncStore.departStop(activeStop.id);
+                Alert.alert(
+                  'Stop Departed',
+                  `${activeStop.name} completed. Next stop is now active and synced with Driver.`
+                );
               }}
               activeOpacity={0.85}
             >
-              <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
-              <Text style={styles.btnResendQrMainText}>
-                Share Ticket QR Pass to WhatsApp ➔
+              <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+              <Text style={styles.btnCompletePickupAndDepartText}>
+                Complete Pickup & Depart ➔
               </Text>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -1389,8 +1473,8 @@ const styles = StyleSheet.create({
       : {}),
   },
 
-  // 1. Top Bar
-  topProfileBar: {
+  // Header Bar
+  headerBar: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1398,40 +1482,110 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  profileBadgeCol: {
+  headerLeftCol: {
     flex: 1,
   },
-  roleTitle: {
+  headerConductorTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  conductorNameText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  busRouteTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 4,
-    paddingHorizontal: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  busRouteTagText: {
-    fontSize: 11,
+  headerSubRouteText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#006FD8',
+    marginTop: 2,
+  },
+  tripStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  livePulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#006FD8',
+  },
+  livePulseDotGreen: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10B981',
+  },
+  tripStatusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  btnBackToCalendar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  btnBackToCalendarText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
   },
 
-  // 2. Week Notice
+  // Primary Action Card: Click Here To Check Tickets
+  btnCheckTicketsCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#006FD8',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  ticketIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnCheckTicketsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  btnCheckTicketsSub: {
+    fontSize: 11,
+    color: '#E0F2FE',
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  chevronCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Page 1: Calendar Elements
   weekNoticeCard: {
     width: '100%',
     flexDirection: 'row',
@@ -1463,8 +1617,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 15,
   },
-
-  // 3. Fast Week Carousel
   weekCarouselScroll: {
     width: '100%',
     marginBottom: 14,
@@ -1507,24 +1659,6 @@ const styles = StyleSheet.create({
   weekDayNumTextSelected: {
     color: '#FFFFFF',
   },
-  miniPendingDot: {
-    backgroundColor: '#F59E0B',
-    borderRadius: 6,
-    paddingHorizontal: 4,
-    marginTop: 4,
-  },
-  miniPendingDotText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  miniConfirmedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginTop: 4,
-  },
   miniTodayLabel: {
     fontSize: 9,
     fontWeight: '800',
@@ -1534,8 +1668,6 @@ const styles = StyleSheet.create({
   miniTodayLabelSelected: {
     color: '#BFDBFE',
   },
-
-  // 4. Calendar Card
   calendarCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
@@ -1638,23 +1770,6 @@ const styles = StyleSheet.create({
   lockedMiniIcon: {
     marginTop: 1,
   },
-  dayDotRow: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 2,
-  },
-  pendingDotMini: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#F59E0B',
-  },
-  confirmedDotMini: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#10B981',
-  },
   calendarLegendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1674,18 +1789,11 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 3,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
   legendLabel: {
     fontSize: 10,
     fontWeight: '600',
     color: '#64748B',
   },
-
-  // 5. Selected Day Card
   dateActionCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
@@ -1725,14 +1833,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // BUS SEATING POPUP MODAL
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 14,
-  },
+  // Bus Seating Modal
   busModalCard: {
     width: '100%',
     maxWidth: 440,
@@ -1744,15 +1845,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 24,
     elevation: 10,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: 10,
   },
   modalBusIconCircle: {
     width: 36,
@@ -1774,8 +1866,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
-
-  // Bus Legend
   busLegendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1821,8 +1911,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#475569',
   },
-
-  // Front Cabin
   frontCabinBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1840,8 +1928,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#475569',
   },
-
-  // Coach Body
   busCoachBody: {
     backgroundColor: '#F8FAFC',
     borderRadius: 14,
@@ -1919,8 +2005,6 @@ const styles = StyleSheet.create({
     right: 2,
     color: '#0F172A',
   },
-
-  // Reservation Form Inside Popup
   reservationFormBox: {
     backgroundColor: '#EFF6FF',
     borderRadius: 12,
@@ -1928,6 +2012,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#BFDBFE',
     marginTop: 8,
+  },
+  reservationFormTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E40AF',
   },
   reservationFormHeader: {
     flexDirection: 'row',
@@ -1937,11 +2026,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#DBEAFE',
     paddingBottom: 6,
-  },
-  reservationFormTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1E40AF',
   },
   formGroup: {
     marginBottom: 10,
@@ -2031,141 +2115,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-
-  // Inspected Seat Details
-  inspectedSeatCard: {
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1.5,
-    marginTop: 8,
-  },
-  inspectedSeatCardPending: {
-    backgroundColor: '#FFFDF5',
-    borderColor: '#FDE68A',
-  },
-  inspectedSeatCardConfirmed: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  inspectedTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  inspectedName: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  inspectedSub: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  inspectedSeats: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#006FD8',
-    marginTop: 3,
-  },
-  inspectedBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgePending: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  badgePendingText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#B45309',
-  },
-  badgeConfirmed: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  badgeConfirmedText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#047857',
-  },
-  inspectedActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  btnSecondaryWa: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  btnSecondaryWaText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#006FD8',
-  },
-  btnPrimaryVerify: {
-    flex: 1.3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#059669',
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  btnPrimaryVerifyText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  btnViewQrSmall: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  btnViewQrSmallText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#006FD8',
-  },
-  btnShareQrWa: {
-    flex: 1.2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#F0FDF4',
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  btnShareQrWaText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#059669',
-  },
-
   tapToSelectHintBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2179,186 +2128,625 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Modal Card Generic
-  modalCard: {
+  // =============================================================
+  // PAGE 2: SCREENSHOT-MATCHING STYLES (NEXT PICKUP CARD)
+  // =============================================================
+  nextPickupCardScreenshot: {
     width: '100%',
-    maxWidth: 420,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
     shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
   },
-  verificationCardContent: {
+  nextPickupTopScreenshot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  nextPickupLabelScreenshot: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  nextPickupPlaceTitleScreenshot: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  within50mBadgeScreenshot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  within50mBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  passengersToPickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  passengersToPickTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  bookedCountBadgeScreenshot: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  passengerRowScreenshot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  passengerNameScreenshot: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  waitingTagScreenshot: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  boardedTagScreenshot: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  waitingTagTextScreenshot: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  boardedTagTextScreenshot: {
+    color: '#047857',
+  },
+  passengerDetailSubScreenshot: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  boldSeatTextScreenshot: {
+    color: '#006FD8',
+    fontWeight: '900',
+  },
+  farePaidGreenScreenshot: {
+    color: '#059669',
+    fontWeight: '800',
+  },
+  callCircleBtnScreenshot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnCheckInScreenshot: {
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnCheckInScreenshotBoarded: {
+    backgroundColor: '#10B981',
+    borderColor: '#059669',
+  },
+  btnCheckInTextScreenshot: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  btnCheckInTextScreenshotBoarded: {
+    color: '#FFFFFF',
+  },
+  btnOpenArrivalCheckInScreenshot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  btnOpenArrivalCheckInTextScreenshot: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+
+  // Ticket Verification Section in Page 2
+  ticketVerificationSection: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  ticketSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  ticketSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  verifyTabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  verifyTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  verifyTabBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  verifyTabBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  verifyTabBtnTextActive: {
+    color: '#006FD8',
+  },
+  cameraViewfinderBox: {
+    height: 170,
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
     marginBottom: 12,
   },
-  verifyCustomerBox: {
+  scanningLaserLine: {
+    position: 'absolute',
+    top: 10,
+    left: 20,
+    right: 20,
+    height: 2,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+  },
+  cornerMark: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderColor: '#006FD8',
+  },
+  cornerTL: { top: 14, left: 14, borderTopWidth: 3, borderLeftWidth: 3 },
+  cornerTR: { top: 14, right: 14, borderTopWidth: 3, borderRightWidth: 3 },
+  cornerBL: { bottom: 14, left: 14, borderBottomWidth: 3, borderLeftWidth: 3 },
+  cornerBR: { bottom: 14, right: 14, borderBottomWidth: 3, borderRightWidth: 3 },
+  cameraAimText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  simulateScanSection: {
     backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  simulateScanTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  simulateButtonsGrid: {
+    gap: 6,
+  },
+  simulateScanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  simulateScanBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#006FD8',
+  },
+  scanResultCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    marginBottom: 10,
+  },
+  scanResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  verifiedGreenCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanResultName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  scanResultRef: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  paidPillBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  paidPillBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  scanResultDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  scanResultSeats: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  scanResultRoute: {
+    fontSize: 11,
+    color: '#475569',
+  },
+  btnConfirmScanBoard: {
+    backgroundColor: '#059669',
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  btnConfirmScanBoardDone: {
+    backgroundColor: '#10B981',
+  },
+  btnConfirmScanBoardText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // Phone Lookup Tab
+  phoneSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginBottom: 8,
+  },
+  phoneSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0F172A',
+  },
+  lookupSubNotice: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+    marginBottom: 10,
+  },
+  lookupPassengerCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 8,
   },
-  verifyCustomerName: {
+  lookupCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  lookupPassengerName: {
     fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
   },
-  verifyCustomerSub: {
-    fontSize: 10,
+  lookupPaidBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  lookupPaidGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  lookupPaidGreenText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  lookupPaidAmber: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  lookupPaidAmberText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  lookupPhoneText: {
+    fontSize: 11,
     color: '#64748B',
     marginTop: 2,
   },
-  verifySeatsText: {
+  lookupSeatsText: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 2,
+  },
+  boldText: {
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  boldSeatText: {
+    color: '#006FD8',
+    fontWeight: '900',
+  },
+  btnLookupCheckIn: {
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnLookupCheckInDone: {
+    backgroundColor: '#10B981',
+    borderColor: '#059669',
+  },
+  btnLookupCheckInText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#006FD8',
-    marginTop: 3,
   },
-  verifyAmountBox: {
+  btnLookupCheckInDoneText: {
+    color: '#FFFFFF',
+  },
+  syncAttributionText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 2,
+  },
+
+  // 2-Way Staff Sync Banner
+  syncStatusFooterNotice: {
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     backgroundColor: '#ECFDF5',
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#A7F3D0',
-    marginBottom: 10,
   },
-  verifyAmountLabel: {
+  syncStatusFooterText: {
     fontSize: 11,
-    fontWeight: '700',
     color: '#065F46',
+    flex: 1,
+    lineHeight: 15,
+    fontWeight: '600',
   },
-  verifyAmountNumber: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#047857',
+
+  // Modal Overlay & Arrival Card
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 14,
   },
-  qrDispatchNotice: {
+  modalHeaderRow: {
     flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 10,
+  },
+  arrivalModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  arrivedIconPulseCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#EFF6FF',
-    borderRadius: 10,
-    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
-  qrDispatchNoticeText: {
-    fontSize: 10,
-    color: '#1E40AF',
-    flex: 1,
-    lineHeight: 14,
-  },
-  btnConfirmPaymentMain: {
+  arrivalSyncNoticeBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#059669',
-    paddingVertical: 11,
+    backgroundColor: '#F0F9FF',
+    padding: 10,
     borderRadius: 10,
-    marginTop: 6,
-  },
-  btnConfirmPaymentMainText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-
-  // QR Modal
-  ticketCardContainer: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#BAE6FD',
     marginBottom: 12,
   },
-  ticketVerifiedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#ECFDF5',
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  ticketVerifiedBannerText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#047857',
-  },
-  qrCodeWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignSelf: 'center',
-    marginBottom: 10,
-  },
-  qrCodeImage: {
-    width: 140,
-    height: 140,
-  },
-  qrPassTokenText: {
+  arrivalSyncNoticeText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 4,
-  },
-  ticketInfoList: {
-    gap: 4,
-  },
-  ticketInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ticketInfoLabel: {
-    fontSize: 10,
-    color: '#64748B',
+    color: '#0369A1',
+    flex: 1,
+    lineHeight: 15,
     fontWeight: '600',
   },
-  ticketInfoValue: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0F172A',
+  arrivalPassengerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  ticketInfoValueBold: {
-    fontSize: 11,
+  arrivalPassengerName: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
   },
-  ticketInfoValueSeats: {
+  arrivalPassengerSub: {
     fontSize: 11,
-    fontWeight: '900',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  arrivalBoardedAt: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+    marginTop: 2,
+  },
+  btnCallSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnCheckInToggle: {
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnCheckInToggleBoarded: {
+    backgroundColor: '#10B981',
+    borderColor: '#059669',
+  },
+  btnCheckInToggleText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: '#006FD8',
   },
-  btnResendQrMain: {
+  btnCheckInToggleTextBoarded: {
+    color: '#FFFFFF',
+  },
+  btnCompletePickupAndDepart: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#25D366',
-    paddingVertical: 11,
-    borderRadius: 10,
+    backgroundColor: '#006FD8',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 14,
   },
-  btnResendQrMainText: {
+  btnCompletePickupAndDepartText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
   },
 });
