@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,24 +9,23 @@ import {
   Modal,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { MOCK_PASSENGERS } from '../data/mockDatabase';
-
-let WebViewComponent = null;
-if (Platform.OS !== 'web') {
-  try {
-    WebViewComponent = require('react-native-webview').WebView;
-  } catch (e) {
-    WebViewComponent = null;
-  }
-}
 
 export default function DriverDashboardScreen({ user }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showBusDetailsModal, setShowBusDetailsModal] = useState(false);
   const [isTripStarted, setIsTripStarted] = useState(false);
   const [passengersList, setPassengersList] = useState(MOCK_PASSENGERS);
+
+  // Live GPS tracking states
+  const [driverCoords, setDriverCoords] = useState(null);
+  const [gpsStatus, setGpsStatus] = useState('STANDBY'); // 'STANDBY' | 'ACQUIRING' | 'ACTIVE' | 'PERMISSION_DENIED' | 'ERROR'
+  const [isGpsLoading, setIsGpsLoading] = useState(false);
+  const locationWatcherRef = useRef(null);
 
   const tripTime = '09:30 PM';
   const routeName = 'Route 87: Colombo Central ➔ Jaffna Town';
@@ -38,6 +37,16 @@ export default function DriverDashboardScreen({ user }) {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Cleanup location watcher on unmount
+  useEffect(() => {
+    return () => {
+      if (locationWatcherRef.current) {
+        locationWatcherRef.current.remove();
+        locationWatcherRef.current = null;
+      }
+    };
   }, []);
 
   const formatHoursMinutes = (date) => {
@@ -74,12 +83,120 @@ export default function DriverDashboardScreen({ user }) {
     );
   };
 
-  // Open native Google Maps app for turn-by-turn guidance
-  const handleOpenNativeGoogleMaps = () => {
-    const url = 'https://www.google.com/maps/dir/?api=1&origin=Colombo+Fort&destination=Jaffna+Central+Bus+Stand&travelmode=driving';
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Navigation', 'Unable to launch Google Maps app.');
+  // Turn on mobile GPS chip and start tracking
+  const startLiveGpsTracking = async () => {
+    setIsGpsLoading(true);
+    setGpsStatus('ACQUIRING');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setGpsStatus('PERMISSION_DENIED');
+        setIsGpsLoading(false);
+        Alert.alert(
+          'Location Permission Required',
+          'PNG Express needs your device GPS permission to track bus navigation in real-time.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+
+      // Fetch immediate current location from mobile GPS
+      const initialLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      setDriverCoords(initialLocation.coords);
+      setGpsStatus('ACTIVE');
+      setIsGpsLoading(false);
+
+      // Subscribe to real-time location stream as the bus drives
+      if (locationWatcherRef.current) {
+        locationWatcherRef.current.remove();
+      }
+
+      locationWatcherRef.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 4000,
+          distanceInterval: 10,
+        },
+        (loc) => {
+          setDriverCoords(loc.coords);
+          setGpsStatus('ACTIVE');
+        }
+      );
+
+      return true;
+    } catch (error) {
+      console.warn('GPS location error:', error);
+      setGpsStatus('ERROR');
+      setIsGpsLoading(false);
+      return false;
+    }
+  };
+
+  // Launch official Google Maps app for live turn-by-turn driving navigation from live current location
+  const launchGoogleMapsNavigation = async () => {
+    const destLat = 9.6615;
+    const destLng = 80.0255;
+    const destName = 'Jaffna Central Bus Stand';
+
+    // When destination is passed without origin, Google Maps defaults to current device GPS!
+    const universalUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving&dir_action=navigate`;
+
+    const nativeScheme = Platform.select({
+      ios: `comgooglemaps://?daddr=${destLat},${destLng}&directionsmode=driving`,
+      android: `google.navigation:q=${destLat},${destLng}&mode=d`,
+      default: universalUrl,
     });
+
+    if (Platform.OS !== 'web') {
+      try {
+        const canOpen = await Linking.canOpenURL(nativeScheme);
+        if (canOpen) {
+          await Linking.openURL(nativeScheme);
+          return;
+        }
+      } catch (e) {
+        // Fallback below
+      }
+    }
+
+    Linking.openURL(universalUrl).catch(() => {
+      Alert.alert(
+        'Google Maps Navigation',
+        'Could not open Google Maps. Please ensure Google Maps is installed on your mobile phone.'
+      );
+    });
+  };
+
+  // Start Trip: Activate mobile GPS & trigger Google Maps navigation
+  const handleStartTripWithGps = async () => {
+    setIsTripStarted(true);
+    await startLiveGpsTracking();
+    launchGoogleMapsNavigation();
+  };
+
+  // End Trip confirmation
+  const handleEndTrip = () => {
+    Alert.alert(
+      'Complete Trip',
+      'Are you sure you want to conclude Route 87 to Jaffna Central Terminal?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Conclude Trip',
+          style: 'destructive',
+          onPress: () => {
+            if (locationWatcherRef.current) {
+              locationWatcherRef.current.remove();
+              locationWatcherRef.current = null;
+            }
+            setGpsStatus('STANDBY');
+            setIsTripStarted(false);
+          },
+        },
+      ]
+    );
   };
 
   // Call passenger
@@ -90,7 +207,7 @@ export default function DriverDashboardScreen({ user }) {
   };
 
   // -------------------------------------------------------------
-  // VIEW 2: In-App Live Google Map & Booked Passenger Direction View
+  // VIEW 2: In-Transit Live GPS & Booked Passenger Manifest View
   // -------------------------------------------------------------
   if (isTripStarted) {
     return (
@@ -113,39 +230,121 @@ export default function DriverDashboardScreen({ user }) {
 
           <TouchableOpacity
             style={styles.openExternalMapsBtn}
-            onPress={handleOpenNativeGoogleMaps}
+            onPress={launchGoogleMapsNavigation}
             activeOpacity={0.8}
           >
-            <Feather name="navigation" size={15} color="#006FD8" />
+            <Feather name="navigation" size={14} color="#006FD8" />
             <Text style={styles.openExternalMapsText}>Maps App</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Embedded Google Map (in our software) */}
-        <View style={styles.mapFrameBox}>
-          {Platform.OS === 'web' ? (
-            <iframe
-              title="Google Maps Direction"
-              src="https://maps.google.com/maps?saddr=Pettah+Bus+Stand+Colombo&daddr=Jaffna+Central+Bus+Stand&output=embed"
-              style={{ width: '100%', height: '100%', border: 'none' }}
-              allowFullScreen
-            />
-          ) : WebViewComponent ? (
-            <WebViewComponent
-              source={{ uri: 'https://maps.google.com/maps?saddr=Pettah+Bus+Stand+Colombo&daddr=Jaffna+Central+Bus+Stand&output=embed' }}
-              style={styles.mapWebView}
-              startInLoadingState
-            />
-          ) : (
-            <View style={styles.mapFallbackBox}>
-              <Ionicons name="map" size={36} color="#006FD8" />
-              <Text style={styles.mapFallbackTitle}>Google Route Direction</Text>
-              <Text style={styles.mapFallbackSub}>Colombo Fort ➔ Jaffna Central Terminal</Text>
-              <TouchableOpacity style={styles.btnLaunchFallback} onPress={handleOpenNativeGoogleMaps}>
-                <Text style={styles.btnLaunchFallbackText}>Open Google Maps Navigation</Text>
-              </TouchableOpacity>
+        {/* Live GPS Telematics Card */}
+        <View style={styles.telematicsCard}>
+          {/* Status & Accuracy Header */}
+          <View style={styles.telematicsHeader}>
+            <View style={styles.telematicsStatusRow}>
+              <View
+                style={[
+                  styles.gpsStatusDot,
+                  gpsStatus === 'ACTIVE'
+                    ? styles.gpsDotGreen
+                    : gpsStatus === 'ACQUIRING'
+                    ? styles.gpsDotYellow
+                    : styles.gpsDotRed,
+                ]}
+              />
+              <Text style={styles.gpsStatusTitle}>
+                {gpsStatus === 'ACTIVE'
+                  ? 'LIVE MOBILE GPS ACTIVE'
+                  : gpsStatus === 'ACQUIRING'
+                  ? 'ACQUIRING SATELLITE FIX...'
+                  : gpsStatus === 'PERMISSION_DENIED'
+                  ? 'GPS PERMISSION REQUIRED'
+                  : 'GPS READY'}
+              </Text>
             </View>
-          )}
+
+            <View style={styles.gpsBadge}>
+              <Ionicons name="navigate-circle" size={14} color="#006FD8" />
+              <Text style={styles.gpsBadgeText}>
+                {driverCoords
+                  ? `±${Math.round(driverCoords.accuracy || 4)}m Acc.`
+                  : 'High Precision'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Coordinates & Destination */}
+          <View style={styles.telematicsBody}>
+            <View style={styles.telematicsMetricCol}>
+              <Text style={styles.metricLabel}>CURRENT GPS POSITION</Text>
+              <Text style={styles.metricValue}>
+                {driverCoords
+                  ? `${driverCoords.latitude.toFixed(4)}° N, ${driverCoords.longitude.toFixed(4)}° E`
+                  : isGpsLoading
+                  ? 'Locking satellite signal...'
+                  : 'Colombo Terminal Area'}
+              </Text>
+            </View>
+
+            <View style={styles.telematicsMetricCol}>
+              <Text style={styles.metricLabel}>ROUTE DESTINATION</Text>
+              <Text style={styles.metricDestValue}>
+                Jaffna Central Terminal <Text style={styles.metricDistText}>(396 km)</Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Next Upcoming Passenger Pickup Stop */}
+          <View style={styles.nextStopNotice}>
+            <Ionicons name="location-sharp" size={17} color="#006FD8" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.nextStopNoticeTitle}>Next Stop: Pettah Central Bus Stand</Text>
+              <Text style={styles.nextStopNoticeSub}>
+                Scheduled Departure: 08:30 PM • 2 Booked Passengers Waiting
+              </Text>
+            </View>
+          </View>
+
+          {/* Main Action: Launch Live Google Maps Navigation */}
+          <TouchableOpacity
+            style={styles.btnOpenGoogleMaps}
+            onPress={launchGoogleMapsNavigation}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="navigate" size={18} color="#FFFFFF" />
+            <Text style={styles.btnOpenGoogleMapsText}>
+              Open Live Google Maps Navigation
+            </Text>
+          </TouchableOpacity>
+
+          {/* Trip Controls (Rest Stop / End Trip) */}
+          <View style={styles.tripControlsRow}>
+            <TouchableOpacity
+              style={styles.tripControlBtn}
+              onPress={() =>
+                Alert.alert(
+                  'Rest Stop Logged',
+                  'Refreshment rest stop logged at highway depot. Passengers and dispatch notified.'
+                )
+              }
+              activeOpacity={0.7}
+            >
+              <Ionicons name="cafe-outline" size={16} color="#475569" />
+              <Text style={styles.tripControlBtnText}>Rest Stop</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tripControlBtn, styles.tripControlBtnEnd]}
+              onPress={handleEndTrip}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="flag-outline" size={16} color="#EF4444" />
+              <Text style={[styles.tripControlBtnText, styles.tripControlBtnEndText]}>
+                End Trip
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Scrollable Booked Passengers & Pickup Locations */}
@@ -310,7 +509,18 @@ export default function DriverDashboardScreen({ user }) {
             </View>
           </View>
 
-          {/* Stop 5: Jaffna Central Terminal */}
+          {/* Stop 5: Kilinochchi Town Halt */}
+          <View style={styles.pickupStopCard}>
+            <View style={styles.stopHeader}>
+              <View style={[styles.stopIconDot, { backgroundColor: '#EC4899' }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stopLocationName}>Kilinochchi Town Halt</Text>
+                <Text style={styles.stopTimeText}>Halt: 03:15 AM • Passenger Drop & Boarding</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Stop 6: Jaffna Central Terminal */}
           <View style={[styles.pickupStopCard, { marginBottom: 30 }]}>
             <View style={styles.stopHeader}>
               <View style={[styles.stopIconDot, { backgroundColor: '#006FD8' }]} />
@@ -333,7 +543,7 @@ export default function DriverDashboardScreen({ user }) {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. Live Digital Clock Section (Without LIVE SYSTEM TIME pill) */}
+      {/* 1. Live Digital Clock Section */}
       <View style={styles.clockSection}>
         <Text style={styles.dateLabel}>{formatDate(currentTime)}</Text>
         <View style={styles.timeRow}>
@@ -383,11 +593,17 @@ export default function DriverDashboardScreen({ user }) {
         {/* Start Button */}
         <TouchableOpacity
           style={styles.btnStartTrip}
-          onPress={() => setIsTripStarted(true)}
+          onPress={handleStartTripWithGps}
           activeOpacity={0.85}
         >
-          <Feather name="play" size={18} color="#FFFFFF" />
-          <Text style={styles.btnStartTripText}>Start Trip</Text>
+          {isGpsLoading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Feather name="play" size={18} color="#FFFFFF" />
+          )}
+          <Text style={styles.btnStartTripText}>
+            {isGpsLoading ? 'Activating GPS...' : 'Start Trip'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -778,7 +994,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
@@ -832,62 +1048,184 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#006FD8',
   },
-  mapFrameBox: {
-    width: '100%',
-    height: 240,
-    backgroundColor: '#E2E8F0',
-    overflow: 'hidden',
-    borderBottomWidth: 1,
-    borderBottomColor: '#CBD5E1',
+
+  // Live GPS Telematics Card
+  telematicsCard: {
+    margin: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 3,
   },
-  mapWebView: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  mapFallbackBox: {
-    flex: 1,
+  telematicsHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    backgroundColor: '#F8FAFC',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  mapFallbackTitle: {
-    fontSize: 16,
+  telematicsStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gpsStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  gpsDotGreen: {
+    backgroundColor: '#10B981',
+  },
+  gpsDotYellow: {
+    backgroundColor: '#F59E0B',
+  },
+  gpsDotRed: {
+    backgroundColor: '#EF4444',
+  },
+  gpsStatusTitle: {
+    fontSize: 11,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 8,
+    letterSpacing: 0.5,
   },
-  mapFallbackSub: {
-    fontSize: 12,
+  gpsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  gpsBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#006FD8',
+  },
+  telematicsBody: {
+    paddingVertical: 10,
+    gap: 8,
+  },
+  telematicsMetricCol: {
+    gap: 2,
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#64748B',
-    marginTop: 2,
-    marginBottom: 12,
+    letterSpacing: 0.5,
   },
-  btnLaunchFallback: {
-    backgroundColor: '#006FD8',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  metricValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  btnLaunchFallbackText: {
-    color: '#FFFFFF',
+  metricDestValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  metricDistText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#006FD8',
+  },
+  nextStopNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginVertical: 4,
+  },
+  nextStopNoticeTitle: {
     fontSize: 12,
     fontWeight: '800',
+    color: '#0F172A',
   },
+  nextStopNoticeSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  btnOpenGoogleMaps: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 10,
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  btnOpenGoogleMapsText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  tripControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  tripControlBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tripControlBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  tripControlBtnEnd: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  tripControlBtnEndText: {
+    color: '#EF4444',
+  },
+
+  // Waypoints & Booked Passenger Manifest
   passengerScroll: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 14,
   },
   stopsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   stopsSectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
