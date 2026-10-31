@@ -15,6 +15,46 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { MOCK_PASSENGERS } from '../data/mockDatabase';
 
+// Waypoint GPS Coordinates
+const THALAWA_WAYPOINT = {
+  name: 'Thalawa Bus Stand',
+  lat: 8.2045,
+  lng: 80.3230,
+  time: '08:45 PM',
+};
+
+const ANURADHAPURA_WAYPOINT = {
+  name: 'Anuradhapura New Town Bus Stand',
+  lat: 8.3242,
+  lng: 80.4072,
+  time: '09:20 PM',
+};
+
+const JAFFNA_DESTINATION = {
+  name: 'Jaffna Central Terminal',
+  lat: 9.6615,
+  lng: 80.0255,
+  time: '02:30 AM',
+};
+
+// Haversine formula for live road distance calculation
+const calculateDistanceKm = (fromLat, fromLng, toLat, toLng) => {
+  if (!fromLat || !fromLng || !toLat || !toLng) return null;
+  const R = 6371; // Earth radius in km
+  const dLat = ((toLat - fromLat) * Math.PI) / 180;
+  const dLng = ((toLng - fromLng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((fromLat * Math.PI) / 180) *
+      Math.cos((toLat * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const straightKm = R * c;
+  // Sri Lanka winding road factor (~1.22x straight-line distance)
+  return Math.round(straightKm * 1.22 * 10) / 10;
+};
+
 export default function DriverDashboardScreen({ user }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showBusDetailsModal, setShowBusDetailsModal] = useState(false);
@@ -27,8 +67,8 @@ export default function DriverDashboardScreen({ user }) {
   const [isGpsLoading, setIsGpsLoading] = useState(false);
   const locationWatcherRef = useRef(null);
 
-  const tripTime = '09:30 PM';
-  const routeName = 'Route 87: Colombo Central ➔ Jaffna Town';
+  const tripTime = '08:45 PM';
+  const routeName = 'Route 87: Thambuththegama ➔ Jaffna (Via Thalawa & Anuradhapura)';
   const busPlate = 'NB-4592';
 
   // Live real-time clock
@@ -134,14 +174,41 @@ export default function DriverDashboardScreen({ user }) {
     }
   };
 
-  // Launch official Google Maps app for live turn-by-turn driving navigation from live current location
-  const launchGoogleMapsNavigation = async () => {
-    const destLat = 9.6615;
-    const destLng = 80.0255;
-    const destName = 'Jaffna Central Bus Stand';
+  // Open specific waypoint/stop on Google Maps
+  const handleOpenLocationOnMap = (lat, lng, label) => {
+    const universalUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving&dir_action=navigate`;
+    const nativeScheme = Platform.select({
+      ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+      android: `google.navigation:q=${lat},${lng}&mode=d`,
+      default: universalUrl,
+    });
 
-    // When destination is passed without origin, Google Maps defaults to current device GPS!
-    const universalUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving&dir_action=navigate`;
+    if (Platform.OS !== 'web') {
+      Linking.canOpenURL(nativeScheme)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(nativeScheme);
+          } else {
+            Linking.openURL(universalUrl);
+          }
+        })
+        .catch(() => {
+          Linking.openURL(universalUrl);
+        });
+    } else {
+      Linking.openURL(universalUrl);
+    }
+  };
+
+  // Launch official Google Maps app for multi-stop route (Thambuththegama -> Thalawa -> Anuradhapura -> Jaffna)
+  const launchGoogleMapsNavigation = async () => {
+    const destLat = JAFFNA_DESTINATION.lat;
+    const destLng = JAFFNA_DESTINATION.lng;
+    const waypoints = `${THALAWA_WAYPOINT.lat},${THALAWA_WAYPOINT.lng}|${ANURADHAPURA_WAYPOINT.lat},${ANURADHAPURA_WAYPOINT.lng}`;
+
+    const universalUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&waypoints=${encodeURIComponent(
+      waypoints
+    )}&travelmode=driving&dir_action=navigate`;
 
     const nativeScheme = Platform.select({
       ios: `comgooglemaps://?daddr=${destLat},${destLng}&directionsmode=driving`,
@@ -157,7 +224,7 @@ export default function DriverDashboardScreen({ user }) {
           return;
         }
       } catch (e) {
-        // Fallback below
+        // Fallback
       }
     }
 
@@ -206,6 +273,27 @@ export default function DriverDashboardScreen({ user }) {
     });
   };
 
+  // Calculate live dynamic remaining distances from device GPS
+  const distanceToNextPickup =
+    driverCoords && driverCoords.latitude
+      ? calculateDistanceKm(
+          driverCoords.latitude,
+          driverCoords.longitude,
+          THALAWA_WAYPOINT.lat,
+          THALAWA_WAYPOINT.lng
+        )
+      : 12.8;
+
+  const distanceToEndTrip =
+    driverCoords && driverCoords.latitude
+      ? calculateDistanceKm(
+          driverCoords.latitude,
+          driverCoords.longitude,
+          JAFFNA_DESTINATION.lat,
+          JAFFNA_DESTINATION.lng
+        )
+      : 188.5;
+
   // -------------------------------------------------------------
   // VIEW 2: In-Transit Live GPS & Booked Passenger Manifest View
   // -------------------------------------------------------------
@@ -240,7 +328,7 @@ export default function DriverDashboardScreen({ user }) {
 
         {/* Live GPS Telematics Card */}
         <View style={styles.telematicsCard}>
-          {/* Status & Accuracy Header */}
+          {/* Status & Live GPS Coordinates Header */}
           <View style={styles.telematicsHeader}>
             <View style={styles.telematicsStatusRow}>
               <View
@@ -265,45 +353,83 @@ export default function DriverDashboardScreen({ user }) {
             </View>
 
             <View style={styles.gpsBadge}>
-              <Ionicons name="navigate-circle" size={14} color="#006FD8" />
+              <Ionicons name="navigate-circle" size={13} color="#006FD8" />
               <Text style={styles.gpsBadgeText}>
                 {driverCoords
-                  ? `±${Math.round(driverCoords.accuracy || 4)}m Acc.`
+                  ? `${driverCoords.latitude.toFixed(4)}°, ${driverCoords.longitude.toFixed(4)}°`
                   : 'High Precision'}
               </Text>
             </View>
           </View>
 
-          {/* Coordinates & Destination */}
-          <View style={styles.telematicsBody}>
-            <View style={styles.telematicsMetricCol}>
-              <Text style={styles.metricLabel}>CURRENT GPS POSITION</Text>
-              <Text style={styles.metricValue}>
-                {driverCoords
-                  ? `${driverCoords.latitude.toFixed(4)}° N, ${driverCoords.longitude.toFixed(4)}° E`
-                  : isGpsLoading
-                  ? 'Locking satellite signal...'
-                  : 'Colombo Terminal Area'}
+          {/* TWO PRIMARY DYNAMIC REMAINING DISTANCE CARDS */}
+          <View style={styles.remainingDistRow}>
+            {/* 1. Remaining Distance to Next Pickup */}
+            <View style={styles.remainingDistCardPrimary}>
+              <View style={styles.metricIconRow}>
+                <Ionicons name="location" size={15} color="#006FD8" />
+                <Text style={styles.distCardLabelPrimary}>REMAINING TO NEXT PICKUP</Text>
+              </View>
+              <View style={styles.distValueRow}>
+                <Text style={styles.distNumberBigPrimary}>
+                  {(distanceToNextPickup || 12.8).toFixed(1)}
+                </Text>
+                <Text style={styles.distKmUnitPrimary}>km</Text>
+              </View>
+              <Text style={styles.distPlaceSubPrimary} numberOfLines={1}>
+                Thalawa Bus Stand
               </Text>
+              <View style={styles.passengerCountPill}>
+                <Text style={styles.passengerCountPillText}>2 Passengers Waiting</Text>
+              </View>
             </View>
 
-            <View style={styles.telematicsMetricCol}>
-              <Text style={styles.metricLabel}>ROUTE DESTINATION</Text>
-              <Text style={styles.metricDestValue}>
-                Jaffna Central Terminal <Text style={styles.metricDistText}>(396 km)</Text>
+            {/* 2. Remaining Distance to End Trip */}
+            <View style={styles.remainingDistCardSecondary}>
+              <View style={styles.metricIconRow}>
+                <Ionicons name="flag" size={14} color="#475569" />
+                <Text style={styles.distCardLabelSecondary}>REMAINING TO END TRIP</Text>
+              </View>
+              <View style={styles.distValueRow}>
+                <Text style={styles.distNumberBigSecondary}>
+                  {(distanceToEndTrip || 188.5).toFixed(1)}
+                </Text>
+                <Text style={styles.distKmUnitSecondary}>km</Text>
+              </View>
+              <Text style={styles.distPlaceSubSecondary} numberOfLines={1}>
+                Jaffna Central Terminal
               </Text>
+              <View style={styles.routeTagPill}>
+                <Text style={styles.routeTagPillText}>Final Destination</Text>
+              </View>
             </View>
           </View>
 
-          {/* Next Upcoming Passenger Pickup Stop */}
+          {/* Next Upcoming Passenger Pickup Highlight Card */}
           <View style={styles.nextStopNotice}>
-            <Ionicons name="location-sharp" size={17} color="#006FD8" />
+            <View style={styles.nextStopIconCircle}>
+              <Ionicons name="location-sharp" size={16} color="#006FD8" />
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.nextStopNoticeTitle}>Next Stop: Pettah Central Bus Stand</Text>
+              <Text style={styles.nextStopNoticeTitle}>Next Pickup: Thalawa Bus Stand</Text>
               <Text style={styles.nextStopNoticeSub}>
-                Scheduled Departure: 08:30 PM • 2 Booked Passengers Waiting
+                2 Passengers Waiting (Saman Kumara, Dilani Jayasinghe)
               </Text>
             </View>
+            <TouchableOpacity
+              style={styles.showOnMapBtnSmall}
+              onPress={() =>
+                handleOpenLocationOnMap(
+                  THALAWA_WAYPOINT.lat,
+                  THALAWA_WAYPOINT.lng,
+                  THALAWA_WAYPOINT.name
+                )
+              }
+              activeOpacity={0.8}
+            >
+              <Ionicons name="map" size={13} color="#006FD8" />
+              <Text style={styles.showOnMapBtnSmallText}>Map</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Main Action: Launch Live Google Maps Navigation */}
@@ -317,6 +443,39 @@ export default function DriverDashboardScreen({ user }) {
               Open Live Google Maps Navigation
             </Text>
           </TouchableOpacity>
+
+          {/* Quick Pickup Maps Row */}
+          <View style={styles.quickMapsRow}>
+            <TouchableOpacity
+              style={styles.quickMapPill}
+              onPress={() =>
+                handleOpenLocationOnMap(
+                  THALAWA_WAYPOINT.lat,
+                  THALAWA_WAYPOINT.lng,
+                  THALAWA_WAYPOINT.name
+                )
+              }
+              activeOpacity={0.75}
+            >
+              <Ionicons name="navigate-outline" size={13} color="#006FD8" />
+              <Text style={styles.quickMapPillText}>Show Thalawa on Map</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickMapPill}
+              onPress={() =>
+                handleOpenLocationOnMap(
+                  ANURADHAPURA_WAYPOINT.lat,
+                  ANURADHAPURA_WAYPOINT.lng,
+                  ANURADHAPURA_WAYPOINT.name
+                )
+              }
+              activeOpacity={0.75}
+            >
+              <Ionicons name="navigate-outline" size={13} color="#006FD8" />
+              <Text style={styles.quickMapPillText}>Show Anuradhapura on Map</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Trip Controls (Rest Stop / End Trip) */}
           <View style={styles.tripControlsRow}>
@@ -354,24 +513,41 @@ export default function DriverDashboardScreen({ user }) {
             <Text style={styles.stopsCountBadge}>6 Waypoints</Text>
           </View>
 
-          {/* Stop 1: Pettah Central Bus Stand */}
+          {/* Stop 1: Thalawa Bus Stand (Next Pickup - 2 Passengers) */}
           <View style={styles.pickupStopCard}>
             <View style={styles.stopHeader}>
               <View style={[styles.stopIconDot, { backgroundColor: '#10B981' }]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Pettah Central Bus Stand</Text>
-                <Text style={styles.stopTimeText}>Departure: 08:30 PM • 2 Booked Passengers</Text>
+                <Text style={styles.stopLocationName}>Thalawa Bus Stand (Next Pickup)</Text>
+                <Text style={styles.stopTimeText}>
+                  ETA: 08:45 PM • 2 Booked Passengers Waiting
+                </Text>
               </View>
+
+              <TouchableOpacity
+                style={styles.stopMapPillBtn}
+                onPress={() =>
+                  handleOpenLocationOnMap(
+                    THALAWA_WAYPOINT.lat,
+                    THALAWA_WAYPOINT.lng,
+                    THALAWA_WAYPOINT.name
+                  )
+                }
+                activeOpacity={0.75}
+              >
+                <Ionicons name="map-outline" size={12} color="#006FD8" />
+                <Text style={styles.stopMapPillText}>Map</Text>
+              </TouchableOpacity>
             </View>
 
             {passengersList
-              .filter((p) => p.boardingPoint.includes('Pettah'))
+              .filter((p) => p.boardingPoint.includes('Thalawa'))
               .map((p) => (
                 <View key={p.ticketRef} style={styles.passengerRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.passengerNameText}>{p.name}</Text>
                     <Text style={styles.passengerSeatText}>
-                      Seats: {p.seats.join(', ')} • {p.destination}
+                      Seats: {p.seats.join(', ')} • Destination: {p.destination}
                     </Text>
                   </View>
 
@@ -402,24 +578,41 @@ export default function DriverDashboardScreen({ user }) {
               ))}
           </View>
 
-          {/* Stop 2: Wellawatta Clock Tower */}
+          {/* Stop 2: Anuradhapura New Town Bus Stand (Upcoming Pickup - 2 Passengers) */}
           <View style={styles.pickupStopCard}>
             <View style={styles.stopHeader}>
               <View style={[styles.stopIconDot, { backgroundColor: '#F59E0B' }]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Wellawatta Clock Tower</Text>
-                <Text style={styles.stopTimeText}>Pickup: 09:00 PM • 2 Booked Passengers</Text>
+                <Text style={styles.stopLocationName}>Anuradhapura New Town Bus Stand</Text>
+                <Text style={styles.stopTimeText}>
+                  Scheduled Pickup: 09:20 PM • 2 Booked Passengers
+                </Text>
               </View>
+
+              <TouchableOpacity
+                style={styles.stopMapPillBtn}
+                onPress={() =>
+                  handleOpenLocationOnMap(
+                    ANURADHAPURA_WAYPOINT.lat,
+                    ANURADHAPURA_WAYPOINT.lng,
+                    ANURADHAPURA_WAYPOINT.name
+                  )
+                }
+                activeOpacity={0.75}
+              >
+                <Ionicons name="map-outline" size={12} color="#006FD8" />
+                <Text style={styles.stopMapPillText}>Map</Text>
+              </TouchableOpacity>
             </View>
 
             {passengersList
-              .filter((p) => p.boardingPoint.includes('Wellawatta'))
+              .filter((p) => p.boardingPoint.includes('Anuradhapura'))
               .map((p) => (
                 <View key={p.ticketRef} style={styles.passengerRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.passengerNameText}>{p.name}</Text>
                     <Text style={styles.passengerSeatText}>
-                      Seats: {p.seats.join(', ')} • {p.destination}
+                      Seats: {p.seats.join(', ')} • Destination: {p.destination}
                     </Text>
                   </View>
 
@@ -450,73 +643,83 @@ export default function DriverDashboardScreen({ user }) {
               ))}
           </View>
 
-          {/* Stop 3: Soysapura Moratuwa */}
+          {/* Stop 3: Thambuththegama Town (Boarded Earlier - 2 Passengers) */}
+          <View style={styles.pickupStopCard}>
+            <View style={styles.stopHeader}>
+              <View style={[styles.stopIconDot, { backgroundColor: '#64748B' }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stopLocationName}>Thambuththegama Town</Text>
+                <Text style={styles.stopTimeText}>Departed: 08:15 PM • 2 Passengers Onboard</Text>
+              </View>
+            </View>
+
+            {passengersList
+              .filter((p) => p.boardingPoint.includes('Thambuththegama'))
+              .map((p) => (
+                <View key={p.ticketRef} style={styles.passengerRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.passengerNameText}>{p.name}</Text>
+                    <Text style={styles.passengerSeatText}>
+                      Seats: {p.seats.join(', ')} • Destination: {p.destination}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.callSmallBtn}
+                    onPress={() => handleCallPassenger(p.phone, p.name)}
+                  >
+                    <Feather name="phone" size={13} color="#006FD8" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.boardCheckBtn, styles.boardCheckBtnDone]}
+                    onPress={() => handleToggleBoarding(p.ticketRef)}
+                  >
+                    <Text style={[styles.boardCheckText, styles.boardCheckTextDone]}>
+                      ✓ Boarded
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+          </View>
+
+          {/* Stop 4: Medawachchiya Junction */}
           <View style={styles.pickupStopCard}>
             <View style={styles.stopHeader}>
               <View style={[styles.stopIconDot, { backgroundColor: '#3B82F6' }]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Soysapura Moratuwa</Text>
-                <Text style={styles.stopTimeText}>Pickup: 09:20 PM • 2 Booked Passengers</Text>
+                <Text style={styles.stopLocationName}>Medawachchiya Junction</Text>
+                <Text style={styles.stopTimeText}>Scheduled Halt: 10:15 PM</Text>
               </View>
+
+              <TouchableOpacity
+                style={styles.stopMapPillBtn}
+                onPress={() => handleOpenLocationOnMap(8.5414, 80.4952, 'Medawachchiya')}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="map-outline" size={12} color="#006FD8" />
+                <Text style={styles.stopMapPillText}>Map</Text>
+              </TouchableOpacity>
             </View>
-
-            {passengersList
-              .filter((p) => p.boardingPoint.includes('Soysapura'))
-              .map((p) => (
-                <View key={p.ticketRef} style={styles.passengerRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.passengerNameText}>{p.name}</Text>
-                    <Text style={styles.passengerSeatText}>
-                      Seats: {p.seats.join(', ')} • {p.destination}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.callSmallBtn}
-                    onPress={() => handleCallPassenger(p.phone, p.name)}
-                  >
-                    <Feather name="phone" size={13} color="#006FD8" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.boardCheckBtn,
-                      p.status === 'BOARDED' && styles.boardCheckBtnDone,
-                    ]}
-                    onPress={() => handleToggleBoarding(p.ticketRef)}
-                  >
-                    <Text
-                      style={[
-                        styles.boardCheckText,
-                        p.status === 'BOARDED' && styles.boardCheckTextDone,
-                      ]}
-                    >
-                      {p.status === 'BOARDED' ? '✓ Boarded' : 'Check In'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
           </View>
 
-          {/* Stop 4: Vavuniya Rest Stop */}
+          {/* Stop 5: Vavuniya Rest Stop */}
           <View style={styles.pickupStopCard}>
             <View style={styles.stopHeader}>
               <View style={[styles.stopIconDot, { backgroundColor: '#8B5CF6' }]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.stopLocationName}>Vavuniya Highway Rest Stop</Text>
-                <Text style={styles.stopTimeText}>Halt: 01:30 AM • 20 Mins Refreshment Break</Text>
+                <Text style={styles.stopTimeText}>Halt: 11:30 PM • 20 Mins Refreshment Break</Text>
               </View>
-            </View>
-          </View>
 
-          {/* Stop 5: Kilinochchi Town Halt */}
-          <View style={styles.pickupStopCard}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#EC4899' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Kilinochchi Town Halt</Text>
-                <Text style={styles.stopTimeText}>Halt: 03:15 AM • Passenger Drop & Boarding</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.stopMapPillBtn}
+                onPress={() => handleOpenLocationOnMap(8.7514, 80.4971, 'Vavuniya')}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="map-outline" size={12} color="#006FD8" />
+                <Text style={styles.stopMapPillText}>Map</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -526,8 +729,23 @@ export default function DriverDashboardScreen({ user }) {
               <View style={[styles.stopIconDot, { backgroundColor: '#006FD8' }]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.stopLocationName}>Jaffna Central Terminal</Text>
-                <Text style={styles.stopTimeText}>Destination: 04:30 AM • Final Disembarkation</Text>
+                <Text style={styles.stopTimeText}>Destination: 02:30 AM • Final Disembarkation</Text>
               </View>
+
+              <TouchableOpacity
+                style={styles.stopMapPillBtn}
+                onPress={() =>
+                  handleOpenLocationOnMap(
+                    JAFFNA_DESTINATION.lat,
+                    JAFFNA_DESTINATION.lng,
+                    JAFFNA_DESTINATION.name
+                  )
+                }
+                activeOpacity={0.75}
+              >
+                <Ionicons name="map-outline" size={12} color="#006FD8" />
+                <Text style={styles.stopMapPillText}>Map</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -693,7 +911,7 @@ export default function DriverDashboardScreen({ user }) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.infoLabel}>FLEET REGISTRATION</Text>
-                  <Text style={styles.infoValueMain}>Makumbura Central Depot</Text>
+                  <Text style={styles.infoValueMain}>Thambuththegama Central Depot</Text>
                   <Text style={styles.infoSubText}>Expressway Highway Permit #NTC-WP-8812</Text>
                 </View>
               </View>
@@ -1067,7 +1285,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 10,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -1109,46 +1327,136 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#006FD8',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  telematicsBody: {
-    paddingVertical: 10,
-    gap: 8,
+
+  // Remaining Distance Row & Cards
+  remainingDistRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    marginBottom: 8,
   },
-  telematicsMetricCol: {
-    gap: 2,
+  remainingDistCardPrimary: {
+    flex: 1,
+    backgroundColor: '#F0F7FF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
   },
-  metricLabel: {
-    fontSize: 10,
+  distCardLabelPrimary: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#006FD8',
+    letterSpacing: 0.5,
+  },
+  distValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginVertical: 2,
+  },
+  distNumberBigPrimary: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#006FD8',
+    letterSpacing: -0.5,
+  },
+  distKmUnitPrimary: {
+    fontSize: 13,
     fontWeight: '800',
+    color: '#006FD8',
+    marginLeft: 3,
+  },
+  distPlaceSubPrimary: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  passengerCountPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#DBEAFE',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  passengerCountPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+
+  remainingDistCardSecondary: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  distCardLabelSecondary: {
+    fontSize: 9,
+    fontWeight: '900',
     color: '#64748B',
     letterSpacing: 0.5,
   },
-  metricValue: {
-    fontSize: 13,
-    fontWeight: '700',
+  distNumberBigSecondary: {
+    fontSize: 26,
+    fontWeight: '900',
     color: '#0F172A',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: -0.5,
   },
-  metricDestValue: {
+  distKmUnitSecondary: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '800',
+    color: '#64748B',
+    marginLeft: 3,
   },
-  metricDistText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#006FD8',
+  distPlaceSubSecondary: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 6,
   },
+  routeTagPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E2E8F0',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  routeTagPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  metricIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+
+  // Next Stop Notice
   nextStopNotice: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
     padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginVertical: 4,
+    marginVertical: 6,
+  },
+  nextStopIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nextStopNoticeTitle: {
     fontSize: 12,
@@ -1161,6 +1469,24 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
+  showOnMapBtnSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  showOnMapBtnSmallText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+
+  // Main Action: Launch Live Google Maps Navigation
   btnOpenGoogleMaps: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1169,7 +1495,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#006FD8',
     paddingVertical: 12,
     borderRadius: 12,
-    marginTop: 10,
+    marginTop: 6,
     shadowColor: '#006FD8',
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 3 },
@@ -1182,6 +1508,32 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.2,
   },
+
+  // Quick Maps Row
+  quickMapsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  quickMapPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  quickMapPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+
+  // Trip Secondary Controls
   tripControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1274,6 +1626,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 1,
+  },
+  stopMapPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  stopMapPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#006FD8',
   },
   passengerRow: {
     flexDirection: 'row',
