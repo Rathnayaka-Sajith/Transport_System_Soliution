@@ -11,6 +11,7 @@ import {
   Linking,
   Platform,
   Animated,
+  SafeAreaView,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -170,6 +171,9 @@ export default function ConductorDashboardScreen({ user }) {
   const [searchPhoneQuery, setSearchPhoneQuery] = useState('');
   const [scannedTicketResult, setScannedTicketResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState('back'); // 'back' | 'front'
+  const [showFullscreenScanner, setShowFullscreenScanner] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   // Automatic Arrival Check-In Popup (< 50m of pickup place)
   const [showArrivalModal, setShowArrivalModal] = useState(false);
@@ -233,6 +237,7 @@ export default function ConductorDashboardScreen({ user }) {
             text: '✓ Board Passenger',
             onPress: () => {
               handleToggleBoarding(matched.ticketRef);
+              setShowFullscreenScanner(false);
               setScannedTicketResult((prev) =>
                 prev ? { ...prev, status: 'BOARDED' } : null
               );
@@ -1223,58 +1228,104 @@ Thank you for choosing PNG Express! Safe travels.`;
               </View>
             ) : (
               /* REAL CAMERA VIEW WITH SCANNER OVERLAY */
-              <View style={styles.cameraViewfinderBox}>
-                <CameraView
-                  style={StyleSheet.absoluteFillObject}
-                  facing="back"
-                  enableTorch={isTorchOn}
-                  barcodeScannerSettings={{
-                    barcodeTypes: ['qr'],
-                  }}
-                  onBarcodeScanned={hasScanned ? undefined : handleBarcodeScanned}
-                />
+              <View>
+                {/* ONE-TAP FULLSCREEN CAMERA SCANNER BUTTON */}
+                <TouchableOpacity
+                  style={styles.btnLaunchFullscreenScanner}
+                  onPress={() => setShowFullscreenScanner(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="camera" size={19} color="#FFFFFF" />
+                  <Text style={styles.btnLaunchFullscreenScannerText}>
+                    Open Camera Scanner
+                  </Text>
+                  <Feather name="maximize-2" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
 
-                {/* Viewfinder Target Overlays */}
-                <View style={[styles.cornerMark, styles.cornerTL]} />
-                <View style={[styles.cornerMark, styles.cornerTR]} />
-                <View style={[styles.cornerMark, styles.cornerBL]} />
-                <View style={[styles.cornerMark, styles.cornerBR]} />
+                {/* INLINE CAMERA PREVIEW WITH EXPLICIT RIGID DIMENSIONS */}
+                <TouchableOpacity
+                  style={styles.cameraViewfinderBox}
+                  activeOpacity={0.9}
+                  onPress={() => setShowFullscreenScanner(true)}
+                >
+                  <CameraView
+                    style={styles.cameraInlinePreview}
+                    facing={cameraFacing}
+                    enableTorch={isTorchOn}
+                    onCameraReady={() => setIsCameraReady(true)}
+                    onMountError={(err) => {
+                      console.log('Camera mount error:', err);
+                    }}
+                    barcodeScannerSettings={{
+                      barcodeTypes: ['qr'],
+                    }}
+                    onBarcodeScanned={hasScanned ? undefined : handleBarcodeScanned}
+                  />
 
-                <Animated.View
-                  style={[
-                    styles.scanningLaserLine,
-                    {
-                      transform: [
-                        {
-                          translateY: laserAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 150],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                />
+                  {/* Viewfinder Target Overlays */}
+                  <View style={[styles.cornerMark, styles.cornerTL]} />
+                  <View style={[styles.cornerMark, styles.cornerTR]} />
+                  <View style={[styles.cornerMark, styles.cornerBL]} />
+                  <View style={[styles.cornerMark, styles.cornerBR]} />
 
-                <View style={styles.cameraControlsOverlay}>
-                  <TouchableOpacity
-                    style={[styles.torchToggleBtn, isTorchOn && styles.torchToggleBtnActive]}
-                    onPress={() => setIsTorchOn((t) => !t)}
-                  >
-                    <Ionicons
-                      name={isTorchOn ? 'flash' : 'flash-off'}
-                      size={15}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.torchToggleBtnText}>
-                      {isTorchOn ? 'Flash ON' : 'Flash'}
+                  <Animated.View
+                    style={[
+                      styles.scanningLaserLine,
+                      {
+                        transform: [
+                          {
+                            translateY: laserAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, 140],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+
+                  {/* Camera Controls Overlay */}
+                  <View style={styles.cameraControlsOverlay}>
+                    {/* Torch / Flash Toggle */}
+                    <TouchableOpacity
+                      style={[styles.torchToggleBtn, isTorchOn && styles.torchToggleBtnActive]}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setIsTorchOn((t) => !t);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={isTorchOn ? 'flash' : 'flash-off'}
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.torchToggleBtnText}>
+                        {isTorchOn ? 'Flash ON' : 'Flash'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Flip Camera */}
+                    <TouchableOpacity
+                      style={styles.torchToggleBtn}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setCameraFacing((f) => (f === 'back' ? 'front' : 'back'));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="camera-reverse" size={14} color="#FFFFFF" />
+                      <Text style={styles.torchToggleBtnText}>Flip</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.cameraAimPill}>
+                    <Ionicons name="scan-outline" size={12} color="#FFFFFF" />
+                    <Text style={styles.cameraAimText}>
+                      Point at ticket QR or tap to enlarge ⛶
                     </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.cameraAimText}>
-                  Point camera at passenger's digital ticket QR code
-                </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1569,6 +1620,120 @@ Thank you for choosing PNG Express! Safe travels.`;
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ============================================================= */}
+      {/* FULLSCREEN REAL CAMERA QR SCANNER MODAL (NATIVE FIXED WINDOW) */}
+      {/* ============================================================= */}
+      <Modal
+        visible={showFullscreenScanner}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowFullscreenScanner(false)}
+      >
+        <View style={styles.fullscreenScannerRoot}>
+          {/* Real Native CameraView filling the full modal without ScrollView interference */}
+          <CameraView
+            style={StyleSheet.absoluteFillObject}
+            facing={cameraFacing}
+            enableTorch={isTorchOn}
+            onCameraReady={() => setIsCameraReady(true)}
+            onMountError={(err) => {
+              Alert.alert(
+                'Camera Error',
+                err?.message || 'Could not start camera on this device. Please check camera permissions in iOS settings.'
+              );
+            }}
+            barcodeScannerSettings={{
+              barcodeTypes: ['qr'],
+            }}
+            onBarcodeScanned={hasScanned ? undefined : handleBarcodeScanned}
+          />
+
+          {/* Top Bar Overlay */}
+          <SafeAreaView style={styles.scannerTopSafeArea}>
+            <View style={styles.scannerHeaderRow}>
+              <TouchableOpacity
+                style={styles.scannerCloseCircleBtn}
+                onPress={() => setShowFullscreenScanner(false)}
+                activeOpacity={0.8}
+              >
+                <Feather name="x" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <View style={styles.scannerHeaderTitleCol}>
+                <Text style={styles.scannerHeaderTitle}>Scan Ticket QR Pass</Text>
+                <Text style={styles.scannerHeaderSub}>PNG Express • Conductor Validator</Text>
+              </View>
+
+              <View style={styles.scannerControlsGroup}>
+                {/* Flash Toggle */}
+                <TouchableOpacity
+                  style={[styles.scannerTopControlBtn, isTorchOn && styles.scannerTopControlBtnActive]}
+                  onPress={() => setIsTorchOn((t) => !t)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={isTorchOn ? 'flash' : 'flash-off'} size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                {/* Flip Camera */}
+                <TouchableOpacity
+                  style={styles.scannerTopControlBtn}
+                  onPress={() => setCameraFacing((f) => (f === 'back' ? 'front' : 'back'))}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="camera-reverse" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </SafeAreaView>
+
+          {/* Center Scan Reticle Frame */}
+          <View style={styles.scannerCenterContainer} pointerEvents="none">
+            <View style={styles.scannerTargetBox}>
+              <View style={[styles.targetCorner, styles.targetCornerTL]} />
+              <View style={[styles.targetCorner, styles.targetCornerTR]} />
+              <View style={[styles.targetCorner, styles.targetCornerBL]} />
+              <View style={[styles.targetCorner, styles.targetCornerBR]} />
+
+              <Animated.View
+                style={[
+                  styles.scannerLaserLine,
+                  {
+                    transform: [
+                      {
+                        translateY: laserAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 210],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.scannerInstructionText}>
+              Align ticket QR code within the square frame to verify
+            </Text>
+          </View>
+
+          {/* Bottom Bar: Manual Phone Lookup shortcut */}
+          <SafeAreaView style={styles.scannerBottomBar}>
+            <TouchableOpacity
+              style={styles.btnSwitchToPhoneFromScanner}
+              onPress={() => {
+                setShowFullscreenScanner(false);
+                setVerifyTab('PHONE');
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="call-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.btnSwitchToPhoneFromScannerText}>
+                No phone? Verify by Phone Number ➔
+              </Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </View>
       </Modal>
     </ScrollView>
   );
@@ -2532,16 +2697,42 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // Camera Live Viewfinder
-  cameraViewfinderBox: {
-    height: 190,
-    backgroundColor: '#000000',
-    borderRadius: 14,
+  // 1. Launch Fullscreen Scanner Button
+  btnLaunchFullscreenScanner: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FD8',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  btnLaunchFullscreenScannerText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  // 2. Camera Live Viewfinder & Overlays
+  cameraViewfinderBox: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#000000',
+    borderRadius: 14,
     position: 'relative',
     overflow: 'hidden',
     marginBottom: 12,
+  },
+  cameraInlinePreview: {
+    width: '100%',
+    height: 200,
   },
   scanningLaserLine: {
     position: 'absolute',
@@ -2588,16 +2779,158 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  cameraAimText: {
+  cameraAimPill: {
     position: 'absolute',
     bottom: 10,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  cameraAimText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+  },
+
+  // 3. Fullscreen Camera Scanner Modal Styles
+  fullscreenScannerRoot: {
+    flex: 1,
+    backgroundColor: '#000000',
+    position: 'relative',
+  },
+  scannerTopSafeArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  scannerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  scannerCloseCircleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerHeaderTitleCol: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  scannerHeaderTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  scannerHeaderSub: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  scannerControlsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scannerTopControlBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerTopControlBtnActive: {
+    backgroundColor: '#006FD8',
+  },
+  scannerCenterContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  scannerTargetBox: {
+    width: 250,
+    height: 250,
+    position: 'relative',
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+  },
+  targetCorner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: '#006FD8',
+  },
+  targetCornerTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 8 },
+  targetCornerTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 8 },
+  targetCornerBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 8 },
+  targetCornerBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 8 },
+  scannerLaserLine: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    height: 3,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    borderRadius: 2,
+  },
+  scannerInstructionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    marginTop: 20,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  scannerBottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  btnSwitchToPhoneFromScanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  btnSwitchToPhoneFromScannerText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   simulateScanSection: {

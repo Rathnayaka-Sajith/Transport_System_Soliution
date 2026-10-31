@@ -38,7 +38,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PNG Express Staff to access your camera to scan passenger tickets."
+        }
+      ]
     ]
   }
 }
