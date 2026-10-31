@@ -174,6 +174,7 @@ export const MOCK_PASSENGERS = [
   // 1. Next Pickup Stop: Thalawa Bus Stand (2 Passengers)
   {
     ticketRef: 'PNG-BK884210',
+    stopId: 'thalawa',
     name: 'Saman Kumara',
     phone: '+94 77 334 1122',
     seats: [14, 15],
@@ -184,6 +185,7 @@ export const MOCK_PASSENGERS = [
   },
   {
     ticketRef: 'PNG-BK884211',
+    stopId: 'thalawa',
     name: 'Dilani Jayasinghe',
     phone: '+94 71 889 4433',
     seats: [16],
@@ -195,6 +197,7 @@ export const MOCK_PASSENGERS = [
   // 2. Upcoming Stop: Anuradhapura New Town Bus Stand (2 Passengers)
   {
     ticketRef: 'PNG-BK991204',
+    stopId: 'anuradhapura',
     name: 'Chaminda Senanayake',
     phone: '+94 76 554 9911',
     seats: [21, 22],
@@ -205,6 +208,7 @@ export const MOCK_PASSENGERS = [
   },
   {
     ticketRef: 'PNG-BK991205',
+    stopId: 'anuradhapura',
     name: 'Fathima Nisreen',
     phone: '+94 70 223 6677',
     seats: [25],
@@ -216,6 +220,7 @@ export const MOCK_PASSENGERS = [
   // 3. Boarded earlier at Thambuththegama
   {
     ticketRef: 'PNG-BK771092',
+    stopId: 'thambuththegama',
     name: 'Kasun Bandara',
     phone: '+94 77 123 9081',
     seats: [1, 2],
@@ -226,6 +231,7 @@ export const MOCK_PASSENGERS = [
   },
   {
     ticketRef: 'PNG-BK771093',
+    stopId: 'thambuththegama',
     name: 'Mohamed Rizwan',
     phone: '+94 77 665 4433',
     seats: [12, 13],

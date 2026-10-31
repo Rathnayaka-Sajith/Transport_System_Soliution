@@ -15,32 +15,74 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { MOCK_PASSENGERS } from '../data/mockDatabase';
 
-// Waypoint GPS Coordinates
-const THALAWA_WAYPOINT = {
-  name: 'Thalawa Bus Stand',
-  lat: 8.2045,
-  lng: 80.3230,
-  time: '08:45 PM',
-};
+// Initial Route Stops Configuration
+const INITIAL_STOPS = [
+  {
+    id: 'thalawa',
+    name: 'Thalawa Bus Stand',
+    type: 'PICKUP',
+    lat: 8.2045,
+    lng: 80.3230,
+    time: '08:45 PM',
+    status: 'ACTIVE', // 'ACTIVE' | 'PASSED'
+    color: '#006FD8',
+  },
+  {
+    id: 'anuradhapura',
+    name: 'Anuradhapura New Town Bus Stand',
+    type: 'PICKUP',
+    lat: 8.3242,
+    lng: 80.4072,
+    time: '09:20 PM',
+    status: 'UPCOMING', // 'UPCOMING' | 'ACTIVE' | 'PASSED'
+    color: '#F59E0B',
+  },
+  {
+    id: 'medawachchiya',
+    name: 'Medawachchiya Junction',
+    type: 'HALT',
+    lat: 8.5414,
+    lng: 80.4952,
+    time: '10:15 PM',
+    status: 'UPCOMING',
+    color: '#3B82F6',
+  },
+  {
+    id: 'vavuniya',
+    name: 'Vavuniya Highway Rest Stop',
+    type: 'REST',
+    lat: 8.7514,
+    lng: 80.4971,
+    time: '11:30 PM',
+    status: 'UPCOMING',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'jaffna',
+    name: 'Jaffna Central Terminal',
+    type: 'DESTINATION',
+    lat: 9.6615,
+    lng: 80.0255,
+    time: '02:30 AM',
+    status: 'UPCOMING',
+    color: '#10B981',
+  },
+  {
+    id: 'thambuththegama',
+    name: 'Thambuththegama Town',
+    type: 'DEPARTED_ORIGIN',
+    lat: 8.1465,
+    lng: 80.2917,
+    time: '08:15 PM',
+    status: 'PASSED',
+    color: '#64748B',
+  },
+];
 
-const ANURADHAPURA_WAYPOINT = {
-  name: 'Anuradhapura New Town Bus Stand',
-  lat: 8.3242,
-  lng: 80.4072,
-  time: '09:20 PM',
-};
-
-const JAFFNA_DESTINATION = {
-  name: 'Jaffna Central Terminal',
-  lat: 9.6615,
-  lng: 80.0255,
-  time: '02:30 AM',
-};
-
-// Haversine formula for live road distance calculation
-const calculateDistanceKm = (fromLat, fromLng, toLat, toLng) => {
-  if (!fromLat || !fromLng || !toLat || !toLng) return null;
-  const R = 6371; // Earth radius in km
+// Distance calculation functions
+const calculateDistanceMeters = (fromLat, fromLng, toLat, toLng) => {
+  if (!fromLat || !fromLng || !toLat || !toLng) return 999999;
+  const R = 6371e3; // Earth radius in meters
   const dLat = ((toLat - fromLat) * Math.PI) / 180;
   const dLng = ((toLng - fromLng) * Math.PI) / 180;
   const a =
@@ -50,15 +92,21 @@ const calculateDistanceKm = (fromLat, fromLng, toLat, toLng) => {
       Math.sin(dLng / 2) *
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const straightKm = R * c;
+  return Math.round(R * c);
+};
+
+const calculateDistanceKm = (fromLat, fromLng, toLat, toLng) => {
+  if (!fromLat || !fromLng || !toLat || !toLng) return null;
+  const meters = calculateDistanceMeters(fromLat, fromLng, toLat, toLng);
   // Sri Lanka winding road factor (~1.22x straight-line distance)
-  return Math.round(straightKm * 1.22 * 10) / 10;
+  return Math.round((meters / 1000) * 1.22 * 10) / 10;
 };
 
 export default function DriverDashboardScreen({ user }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showBusDetailsModal, setShowBusDetailsModal] = useState(false);
   const [isTripStarted, setIsTripStarted] = useState(false);
+  const [stops, setStops] = useState(INITIAL_STOPS);
   const [passengersList, setPassengersList] = useState(MOCK_PASSENGERS);
 
   // Live GPS tracking states
@@ -112,14 +160,121 @@ export default function DriverDashboardScreen({ user }) {
     });
   };
 
-  // Toggle passenger boarding status
-  const handleToggleBoarding = (ticketRef) => {
+  // Determine currently active stop (the first non-passed stop)
+  const activeStop = stops.find((s) => s.status !== 'PASSED') || stops[stops.length - 1];
+
+  // Calculate live distance to active stop in meters and km
+  const distToActiveStopMeters =
+    driverCoords && driverCoords.latitude && activeStop
+      ? calculateDistanceMeters(
+          driverCoords.latitude,
+          driverCoords.longitude,
+          activeStop.lat,
+          activeStop.lng
+        )
+      : 999999;
+
+  const isWithin50m = distToActiveStopMeters <= 50;
+
+  const distanceToNextPickupKm =
+    driverCoords && driverCoords.latitude && activeStop
+      ? calculateDistanceKm(
+          driverCoords.latitude,
+          driverCoords.longitude,
+          activeStop.lat,
+          activeStop.lng
+        )
+      : activeStop.id === 'thalawa'
+      ? 12.8
+      : 24.5;
+
+  const distanceToEndTripKm =
+    driverCoords && driverCoords.latitude
+      ? calculateDistanceKm(
+          driverCoords.latitude,
+          driverCoords.longitude,
+          9.6615,
+          80.0255
+        )
+      : 188.5;
+
+  // Active stop passengers
+  const activeStopPassengers = passengersList.filter((p) => p.stopId === activeStop.id);
+  const allActivePassengersBoarded =
+    activeStopPassengers.length > 0 &&
+    activeStopPassengers.every((p) => p.status === 'BOARDED');
+  const pendingCountAtActiveStop = activeStopPassengers.filter(
+    (p) => p.status === 'PENDING'
+  ).length;
+
+  // Toggle passenger boarding (Only allowed if stop is NOT passed)
+  const handleToggleBoarding = (ticketRef, stopStatus) => {
+    if (stopStatus === 'PASSED') {
+      Alert.alert(
+        'Stop Already Departed',
+        'This pickup stop has already passed. Passenger boarding is locked and cannot be changed.'
+      );
+      return;
+    }
+
     setPassengersList((prev) =>
-      prev.map((p) =>
-        p.ticketRef === ticketRef
-          ? { ...p, status: p.status === 'BOARDED' ? 'PENDING' : 'BOARDED' }
-          : p
-      )
+      prev.map((p) => {
+        if (p.ticketRef === ticketRef) {
+          const newStatus = p.status === 'BOARDED' ? 'PENDING' : 'BOARDED';
+          return {
+            ...p,
+            status: newStatus,
+            boardedAt: newStatus === 'BOARDED' ? formatHoursMinutes(new Date()) : null,
+          };
+        }
+        return p;
+      })
+    );
+  };
+
+  // Depart / Pass stop:
+  // 1. Any PENDING passenger at this stop becomes "MISSED" (Missed Trip)
+  // 2. Stop status becomes "PASSED"
+  // 3. Stop moves to bottom of list
+  // 4. Next stop automatically becomes active
+  const handleDepartStop = (stopId) => {
+    const departingStop = stops.find((s) => s.id === stopId);
+    const stopName = departingStop ? departingStop.name : 'Stop';
+
+    // 1. Update passengers: any un-boarded passenger at this stop misses the trip
+    setPassengersList((prev) =>
+      prev.map((p) => {
+        if (p.stopId === stopId) {
+          if (p.status === 'PENDING') {
+            return { ...p, status: 'MISSED' };
+          }
+        }
+        return p;
+      })
+    );
+
+    // 2. Mark this stop as PASSED and activate the next upcoming stop
+    setStops((prevStops) => {
+      const updated = prevStops.map((s) => {
+        if (s.id === stopId) {
+          return { ...s, status: 'PASSED' };
+        }
+        return s;
+      });
+
+      // Find the next non-passed stop and make it ACTIVE
+      const nextNonPassed = updated.find((s) => s.status !== 'PASSED');
+      if (nextNonPassed) {
+        return updated.map((s) =>
+          s.id === nextNonPassed.id ? { ...s, status: 'ACTIVE' } : s
+        );
+      }
+      return updated;
+    });
+
+    Alert.alert(
+      'Departed Stop',
+      `${stopName} has been passed. Un-checked passengers marked as "Missed Trip". Next pickup stop is now active.`
     );
   };
 
@@ -174,44 +329,21 @@ export default function DriverDashboardScreen({ user }) {
     }
   };
 
-  // Open specific waypoint/stop on Google Maps
-  const handleOpenLocationOnMap = (lat, lng, label) => {
-    const universalUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving&dir_action=navigate`;
-    const nativeScheme = Platform.select({
-      ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
-      android: `google.navigation:q=${lat},${lng}&mode=d`,
-      default: universalUrl,
-    });
-
-    if (Platform.OS !== 'web') {
-      Linking.canOpenURL(nativeScheme)
-        .then((supported) => {
-          if (supported) {
-            Linking.openURL(nativeScheme);
-          } else {
-            Linking.openURL(universalUrl);
-          }
-        })
-        .catch(() => {
-          Linking.openURL(universalUrl);
-        });
-    } else {
-      Linking.openURL(universalUrl);
-    }
-  };
-
-  // Launch official Google Maps app for multi-stop route (Thambuththegama -> Thalawa -> Anuradhapura -> Jaffna)
+  // Launch official Google Maps app with MULTIPLE STOPS:
+  // Destination: Jaffna Central Terminal (9.6615, 80.0255)
+  // Stop 1: Thalawa Bus Stand (8.2045, 80.3230)
+  // Stop 2: Anuradhapura New Town Bus Stand (8.3242, 80.4072)
   const launchGoogleMapsNavigation = async () => {
-    const destLat = JAFFNA_DESTINATION.lat;
-    const destLng = JAFFNA_DESTINATION.lng;
-    const waypoints = `${THALAWA_WAYPOINT.lat},${THALAWA_WAYPOINT.lng}|${ANURADHAPURA_WAYPOINT.lat},${ANURADHAPURA_WAYPOINT.lng}`;
+    const destLat = 9.6615;
+    const destLng = 80.0255; // Jaffna
+    const waypoints = '8.2045,80.3230|8.3242,80.4072'; // Stop 1: Thalawa | Stop 2: Anuradhapura
 
     const universalUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&waypoints=${encodeURIComponent(
       waypoints
     )}&travelmode=driving&dir_action=navigate`;
 
     const nativeScheme = Platform.select({
-      ios: `comgooglemaps://?daddr=${destLat},${destLng}&directionsmode=driving`,
+      ios: `comgooglemaps://?daddr=${destLat},${destLng}&waypoints=8.2045,80.3230+to:8.3242,80.4072&directionsmode=driving`,
       android: `google.navigation:q=${destLat},${destLng}&mode=d`,
       default: universalUrl,
     });
@@ -236,7 +368,7 @@ export default function DriverDashboardScreen({ user }) {
     });
   };
 
-  // Start Trip: Activate mobile GPS & trigger Google Maps navigation
+  // Start Trip: Activate mobile GPS & trigger Google Maps multi-stop navigation
   const handleStartTripWithGps = async () => {
     setIsTripStarted(true);
     await startLiveGpsTracking();
@@ -273,29 +405,15 @@ export default function DriverDashboardScreen({ user }) {
     });
   };
 
-  // Calculate live dynamic remaining distances from device GPS
-  const distanceToNextPickup =
-    driverCoords && driverCoords.latitude
-      ? calculateDistanceKm(
-          driverCoords.latitude,
-          driverCoords.longitude,
-          THALAWA_WAYPOINT.lat,
-          THALAWA_WAYPOINT.lng
-        )
-      : 12.8;
-
-  const distanceToEndTrip =
-    driverCoords && driverCoords.latitude
-      ? calculateDistanceKm(
-          driverCoords.latitude,
-          driverCoords.longitude,
-          JAFFNA_DESTINATION.lat,
-          JAFFNA_DESTINATION.lng
-        )
-      : 188.5;
+  // Sorted stops: active / upcoming stops first, passed stops sorted to the bottom
+  const sortedStops = [...stops].sort((a, b) => {
+    if (a.status === 'PASSED' && b.status !== 'PASSED') return 1;
+    if (a.status !== 'PASSED' && b.status === 'PASSED') return -1;
+    return 0;
+  });
 
   // -------------------------------------------------------------
-  // VIEW 2: In-Transit Live GPS & Booked Passenger Manifest View
+  // VIEW 2: In-Transit Live GPS & Dynamic Waypoint Manifest View
   // -------------------------------------------------------------
   if (isTripStarted) {
     return (
@@ -362,7 +480,7 @@ export default function DriverDashboardScreen({ user }) {
             </View>
           </View>
 
-          {/* TWO PRIMARY DYNAMIC REMAINING DISTANCE CARDS */}
+          {/* TWO PRIMARY DYNAMIC REMAINING DISTANCE METRICS */}
           <View style={styles.remainingDistRow}>
             {/* 1. Remaining Distance to Next Pickup */}
             <View style={styles.remainingDistCardPrimary}>
@@ -372,15 +490,29 @@ export default function DriverDashboardScreen({ user }) {
               </View>
               <View style={styles.distValueRow}>
                 <Text style={styles.distNumberBigPrimary}>
-                  {(distanceToNextPickup || 12.8).toFixed(1)}
+                  {(distanceToNextPickupKm || 12.8).toFixed(1)}
                 </Text>
                 <Text style={styles.distKmUnitPrimary}>km</Text>
               </View>
               <Text style={styles.distPlaceSubPrimary} numberOfLines={1}>
-                Thalawa Bus Stand
+                {activeStop.name}
               </Text>
-              <View style={styles.passengerCountPill}>
-                <Text style={styles.passengerCountPillText}>2 Passengers Waiting</Text>
+              <View
+                style={[
+                  styles.passengerCountPill,
+                  isWithin50m && styles.passengerCountPillArrived,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.passengerCountPillText,
+                    isWithin50m && styles.passengerCountPillArrivedText,
+                  ]}
+                >
+                  {isWithin50m
+                    ? '📍 Within 50m of stop!'
+                    : `${pendingCountAtActiveStop} Waiting to Board`}
+                </Text>
               </View>
             </View>
 
@@ -392,7 +524,7 @@ export default function DriverDashboardScreen({ user }) {
               </View>
               <View style={styles.distValueRow}>
                 <Text style={styles.distNumberBigSecondary}>
-                  {(distanceToEndTrip || 188.5).toFixed(1)}
+                  {(distanceToEndTripKm || 188.5).toFixed(1)}
                 </Text>
                 <Text style={styles.distKmUnitSecondary}>km</Text>
               </View>
@@ -405,34 +537,57 @@ export default function DriverDashboardScreen({ user }) {
             </View>
           </View>
 
-          {/* Next Upcoming Passenger Pickup Highlight Card */}
-          <View style={styles.nextStopNotice}>
+          {/* Active Pickup Place Action Banner */}
+          <View
+            style={[
+              styles.nextStopNotice,
+              isWithin50m && styles.nextStopNoticeArrived,
+              allActivePassengersBoarded && styles.nextStopNoticeAllDone,
+            ]}
+          >
             <View style={styles.nextStopIconCircle}>
-              <Ionicons name="location-sharp" size={16} color="#006FD8" />
+              <Ionicons
+                name={allActivePassengersBoarded ? 'checkmark-circle' : 'location-sharp'}
+                size={16}
+                color={allActivePassengersBoarded ? '#10B981' : '#006FD8'}
+              />
             </View>
+
             <View style={{ flex: 1 }}>
-              <Text style={styles.nextStopNoticeTitle}>Next Pickup: Thalawa Bus Stand</Text>
+              <Text style={styles.nextStopNoticeTitle}>
+                {isWithin50m ? '📍 Arrived at: ' : 'Active Pickup: '}
+                {activeStop.name}
+              </Text>
               <Text style={styles.nextStopNoticeSub}>
-                2 Passengers Waiting (Saman Kumara, Dilani Jayasinghe)
+                {allActivePassengersBoarded
+                  ? 'All passengers boarded! Ready to depart.'
+                  : `${pendingCountAtActiveStop} passenger(s) pending check-in`}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.showOnMapBtnSmall}
-              onPress={() =>
-                handleOpenLocationOnMap(
-                  THALAWA_WAYPOINT.lat,
-                  THALAWA_WAYPOINT.lng,
-                  THALAWA_WAYPOINT.name
-                )
-              }
-              activeOpacity={0.8}
-            >
-              <Ionicons name="map" size={13} color="#006FD8" />
-              <Text style={styles.showOnMapBtnSmallText}>Map</Text>
-            </TouchableOpacity>
+
+            {/* Depart / Pass Stop Button */}
+            {activeStop.status !== 'PASSED' && activeStop.type === 'PICKUP' && (
+              <TouchableOpacity
+                style={[
+                  styles.departStopBtn,
+                  allActivePassengersBoarded && styles.departStopBtnReady,
+                ]}
+                onPress={() => handleDepartStop(activeStop.id)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.departStopBtnText,
+                    allActivePassengersBoarded && styles.departStopBtnReadyText,
+                  ]}
+                >
+                  {allActivePassengersBoarded ? 'Depart Stop ➔' : 'Pass Stop ➔'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Main Action: Launch Live Google Maps Navigation */}
+          {/* Main Action: Multi-stop Google Maps Navigation */}
           <TouchableOpacity
             style={styles.btnOpenGoogleMaps}
             onPress={launchGoogleMapsNavigation}
@@ -440,42 +595,9 @@ export default function DriverDashboardScreen({ user }) {
           >
             <Ionicons name="navigate" size={18} color="#FFFFFF" />
             <Text style={styles.btnOpenGoogleMapsText}>
-              Open Live Google Maps Navigation
+              Open Live Google Maps Navigation (Via Stops ➔ Jaffna)
             </Text>
           </TouchableOpacity>
-
-          {/* Quick Pickup Maps Row */}
-          <View style={styles.quickMapsRow}>
-            <TouchableOpacity
-              style={styles.quickMapPill}
-              onPress={() =>
-                handleOpenLocationOnMap(
-                  THALAWA_WAYPOINT.lat,
-                  THALAWA_WAYPOINT.lng,
-                  THALAWA_WAYPOINT.name
-                )
-              }
-              activeOpacity={0.75}
-            >
-              <Ionicons name="navigate-outline" size={13} color="#006FD8" />
-              <Text style={styles.quickMapPillText}>Show Thalawa on Map</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickMapPill}
-              onPress={() =>
-                handleOpenLocationOnMap(
-                  ANURADHAPURA_WAYPOINT.lat,
-                  ANURADHAPURA_WAYPOINT.lng,
-                  ANURADHAPURA_WAYPOINT.name
-                )
-              }
-              activeOpacity={0.75}
-            >
-              <Ionicons name="navigate-outline" size={13} color="#006FD8" />
-              <Text style={styles.quickMapPillText}>Show Anuradhapura on Map</Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Trip Controls (Rest Stop / End Trip) */}
           <View style={styles.tripControlsRow}>
@@ -484,7 +606,7 @@ export default function DriverDashboardScreen({ user }) {
               onPress={() =>
                 Alert.alert(
                   'Rest Stop Logged',
-                  'Refreshment rest stop logged at highway depot. Passengers and dispatch notified.'
+                  'Refreshment rest stop logged. Passengers and operations notified.'
                 )
               }
               activeOpacity={0.7}
@@ -506,248 +628,189 @@ export default function DriverDashboardScreen({ user }) {
           </View>
         </View>
 
-        {/* Scrollable Booked Passengers & Pickup Locations */}
+        {/* Scrollable Waypoint & Booked Passenger Manifest */}
         <ScrollView style={styles.passengerScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.stopsHeaderRow}>
-            <Text style={styles.stopsSectionTitle}>Booked Passengers & Pickups</Text>
-            <Text style={styles.stopsCountBadge}>6 Waypoints</Text>
+            <Text style={styles.stopsSectionTitle}>Pickup Stoppages & Manifest</Text>
+            <Text style={styles.stopsCountBadge}>Auto-sorted by arrival</Text>
           </View>
 
-          {/* Stop 1: Thalawa Bus Stand (Next Pickup - 2 Passengers) */}
-          <View style={styles.pickupStopCard}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#10B981' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Thalawa Bus Stand (Next Pickup)</Text>
-                <Text style={styles.stopTimeText}>
-                  ETA: 08:45 PM • 2 Booked Passengers Waiting
-                </Text>
-              </View>
+          {/* Render Stops in Sorted Order (Active/Upcoming on Top, Passed at the Bottom) */}
+          {sortedStops.map((stop) => {
+            const stopPassengers = passengersList.filter((p) => p.stopId === stop.id);
+            const isPassed = stop.status === 'PASSED';
+            const isActive = stop.id === activeStop.id && !isPassed;
 
-              <TouchableOpacity
-                style={styles.stopMapPillBtn}
-                onPress={() =>
-                  handleOpenLocationOnMap(
-                    THALAWA_WAYPOINT.lat,
-                    THALAWA_WAYPOINT.lng,
-                    THALAWA_WAYPOINT.name
-                  )
-                }
-                activeOpacity={0.75}
+            return (
+              <View
+                key={stop.id}
+                style={[
+                  styles.pickupStopCard,
+                  isPassed && styles.pickupStopCardPassed,
+                  isActive && styles.pickupStopCardActive,
+                ]}
               >
-                <Ionicons name="map-outline" size={12} color="#006FD8" />
-                <Text style={styles.stopMapPillText}>Map</Text>
-              </TouchableOpacity>
-            </View>
+                {/* Stop Header */}
+                <View style={styles.stopHeader}>
+                  <View
+                    style={[
+                      styles.stopIconDot,
+                      {
+                        backgroundColor: isPassed
+                          ? '#94A3B8'
+                          : isActive
+                          ? '#006FD8'
+                          : stop.color,
+                      },
+                    ]}
+                  />
 
-            {passengersList
-              .filter((p) => p.boardingPoint.includes('Thalawa'))
-              .map((p) => (
-                <View key={p.ticketRef} style={styles.passengerRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.passengerNameText}>{p.name}</Text>
-                    <Text style={styles.passengerSeatText}>
-                      Seats: {p.seats.join(', ')} • Destination: {p.destination}
+                    <Text
+                      style={[
+                        styles.stopLocationName,
+                        isPassed && styles.stopLocationNamePassed,
+                      ]}
+                    >
+                      {stop.name}
+                    </Text>
+                    <Text style={styles.stopTimeText}>
+                      {isPassed
+                        ? 'Departed & Passed'
+                        : `Scheduled: ${stop.time} • ${stopPassengers.length} Booked Passengers`}
                     </Text>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.callSmallBtn}
-                    onPress={() => handleCallPassenger(p.phone, p.name)}
-                  >
-                    <Feather name="phone" size={13} color="#006FD8" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
+                  {/* Status Badge */}
+                  <View
                     style={[
-                      styles.boardCheckBtn,
-                      p.status === 'BOARDED' && styles.boardCheckBtnDone,
+                      styles.stopStatusBadge,
+                      isPassed
+                        ? styles.stopStatusBadgePassed
+                        : isActive
+                        ? styles.stopStatusBadgeActive
+                        : styles.stopStatusBadgeUpcoming,
                     ]}
-                    onPress={() => handleToggleBoarding(p.ticketRef)}
                   >
                     <Text
                       style={[
-                        styles.boardCheckText,
-                        p.status === 'BOARDED' && styles.boardCheckTextDone,
+                        styles.stopStatusBadgeText,
+                        isPassed
+                          ? styles.stopStatusBadgePassedText
+                          : isActive
+                          ? styles.stopStatusBadgeActiveText
+                          : styles.stopStatusBadgeUpcomingText,
                       ]}
                     >
-                      {p.status === 'BOARDED' ? '✓ Boarded' : 'Check In'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-          </View>
-
-          {/* Stop 2: Anuradhapura New Town Bus Stand (Upcoming Pickup - 2 Passengers) */}
-          <View style={styles.pickupStopCard}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#F59E0B' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Anuradhapura New Town Bus Stand</Text>
-                <Text style={styles.stopTimeText}>
-                  Scheduled Pickup: 09:20 PM • 2 Booked Passengers
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.stopMapPillBtn}
-                onPress={() =>
-                  handleOpenLocationOnMap(
-                    ANURADHAPURA_WAYPOINT.lat,
-                    ANURADHAPURA_WAYPOINT.lng,
-                    ANURADHAPURA_WAYPOINT.name
-                  )
-                }
-                activeOpacity={0.75}
-              >
-                <Ionicons name="map-outline" size={12} color="#006FD8" />
-                <Text style={styles.stopMapPillText}>Map</Text>
-              </TouchableOpacity>
-            </View>
-
-            {passengersList
-              .filter((p) => p.boardingPoint.includes('Anuradhapura'))
-              .map((p) => (
-                <View key={p.ticketRef} style={styles.passengerRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.passengerNameText}>{p.name}</Text>
-                    <Text style={styles.passengerSeatText}>
-                      Seats: {p.seats.join(', ')} • Destination: {p.destination}
+                      {isPassed ? 'PASSED' : isActive ? 'NEXT STOP' : 'UPCOMING'}
                     </Text>
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.callSmallBtn}
-                    onPress={() => handleCallPassenger(p.phone, p.name)}
-                  >
-                    <Feather name="phone" size={13} color="#006FD8" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.boardCheckBtn,
-                      p.status === 'BOARDED' && styles.boardCheckBtnDone,
-                    ]}
-                    onPress={() => handleToggleBoarding(p.ticketRef)}
-                  >
-                    <Text
-                      style={[
-                        styles.boardCheckText,
-                        p.status === 'BOARDED' && styles.boardCheckTextDone,
-                      ]}
-                    >
-                      {p.status === 'BOARDED' ? '✓ Boarded' : 'Check In'}
-                    </Text>
-                  </TouchableOpacity>
                 </View>
-              ))}
-          </View>
 
-          {/* Stop 3: Thambuththegama Town (Boarded Earlier - 2 Passengers) */}
-          <View style={styles.pickupStopCard}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#64748B' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Thambuththegama Town</Text>
-                <Text style={styles.stopTimeText}>Departed: 08:15 PM • 2 Passengers Onboard</Text>
+                {/* Passenger list for this stop */}
+                {stopPassengers.length > 0 ? (
+                  stopPassengers.map((p) => {
+                    const isBoarded = p.status === 'BOARDED';
+                    const isMissed = p.status === 'MISSED';
+
+                    return (
+                      <View
+                        key={p.ticketRef}
+                        style={[
+                          styles.passengerRow,
+                          isMissed && styles.passengerRowMissed,
+                        ]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            {isMissed && (
+                              <View style={styles.missedTripTag}>
+                                <Text style={styles.missedTripTagText}>⚠️ Missed Trip</Text>
+                              </View>
+                            )}
+                            <Text
+                              style={[
+                                styles.passengerNameText,
+                                isMissed && styles.passengerNameTextMissed,
+                              ]}
+                            >
+                              {p.name}
+                            </Text>
+                          </View>
+
+                          <Text style={styles.passengerSeatText}>
+                            Seats: {p.seats.join(', ')} • {p.destination}
+                            {isBoarded && p.boardedAt ? ` • In at ${p.boardedAt}` : ''}
+                          </Text>
+                        </View>
+
+                        {/* Call Passenger */}
+                        <TouchableOpacity
+                          style={styles.callSmallBtn}
+                          onPress={() => handleCallPassenger(p.phone, p.name)}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="phone" size={13} color="#006FD8" />
+                        </TouchableOpacity>
+
+                        {/* Check-In / Boarded / Missed Button */}
+                        {isPassed ? (
+                          // Unclickable / disabled state once stop is passed
+                          <View
+                            style={[
+                              styles.boardCheckBtn,
+                              styles.boardCheckBtnDisabled,
+                              isBoarded && styles.boardCheckBtnDone,
+                              isMissed && styles.boardCheckBtnMissed,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.boardCheckText,
+                                isBoarded && styles.boardCheckTextDone,
+                                isMissed && styles.boardCheckTextMissed,
+                              ]}
+                            >
+                              {isBoarded ? '✓ Boarded' : 'Missed'}
+                            </Text>
+                          </View>
+                        ) : (
+                          // Clickable toggle button when stop is active/upcoming
+                          <TouchableOpacity
+                            style={[
+                              styles.boardCheckBtn,
+                              isBoarded && styles.boardCheckBtnDone,
+                            ]}
+                            onPress={() => handleToggleBoarding(p.ticketRef, stop.status)}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={[
+                                styles.boardCheckText,
+                                isBoarded && styles.boardCheckTextDone,
+                              ]}
+                            >
+                              {isBoarded ? '✓ Boarded' : 'Check In'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.noPassengersText}>
+                    {stop.type === 'REST'
+                      ? '20 Mins Refreshment & Tea Halt'
+                      : stop.type === 'DESTINATION'
+                      ? 'Final Terminal Disembarkation'
+                      : 'Scheduled Transit Halt'}
+                  </Text>
+                )}
               </View>
-            </View>
+            );
+          })}
 
-            {passengersList
-              .filter((p) => p.boardingPoint.includes('Thambuththegama'))
-              .map((p) => (
-                <View key={p.ticketRef} style={styles.passengerRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.passengerNameText}>{p.name}</Text>
-                    <Text style={styles.passengerSeatText}>
-                      Seats: {p.seats.join(', ')} • Destination: {p.destination}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.callSmallBtn}
-                    onPress={() => handleCallPassenger(p.phone, p.name)}
-                  >
-                    <Feather name="phone" size={13} color="#006FD8" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.boardCheckBtn, styles.boardCheckBtnDone]}
-                    onPress={() => handleToggleBoarding(p.ticketRef)}
-                  >
-                    <Text style={[styles.boardCheckText, styles.boardCheckTextDone]}>
-                      ✓ Boarded
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-          </View>
-
-          {/* Stop 4: Medawachchiya Junction */}
-          <View style={styles.pickupStopCard}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#3B82F6' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Medawachchiya Junction</Text>
-                <Text style={styles.stopTimeText}>Scheduled Halt: 10:15 PM</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.stopMapPillBtn}
-                onPress={() => handleOpenLocationOnMap(8.5414, 80.4952, 'Medawachchiya')}
-                activeOpacity={0.75}
-              >
-                <Ionicons name="map-outline" size={12} color="#006FD8" />
-                <Text style={styles.stopMapPillText}>Map</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Stop 5: Vavuniya Rest Stop */}
-          <View style={styles.pickupStopCard}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#8B5CF6' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Vavuniya Highway Rest Stop</Text>
-                <Text style={styles.stopTimeText}>Halt: 11:30 PM • 20 Mins Refreshment Break</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.stopMapPillBtn}
-                onPress={() => handleOpenLocationOnMap(8.7514, 80.4971, 'Vavuniya')}
-                activeOpacity={0.75}
-              >
-                <Ionicons name="map-outline" size={12} color="#006FD8" />
-                <Text style={styles.stopMapPillText}>Map</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Stop 6: Jaffna Central Terminal */}
-          <View style={[styles.pickupStopCard, { marginBottom: 30 }]}>
-            <View style={styles.stopHeader}>
-              <View style={[styles.stopIconDot, { backgroundColor: '#006FD8' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopLocationName}>Jaffna Central Terminal</Text>
-                <Text style={styles.stopTimeText}>Destination: 02:30 AM • Final Disembarkation</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.stopMapPillBtn}
-                onPress={() =>
-                  handleOpenLocationOnMap(
-                    JAFFNA_DESTINATION.lat,
-                    JAFFNA_DESTINATION.lng,
-                    JAFFNA_DESTINATION.name
-                  )
-                }
-                activeOpacity={0.75}
-              >
-                <Ionicons name="map-outline" size={12} color="#006FD8" />
-                <Text style={styles.stopMapPillText}>Map</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <View style={{ height: 30 }} />
         </ScrollView>
       </View>
     );
@@ -1381,10 +1444,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 6,
   },
+  passengerCountPillArrived: {
+    backgroundColor: '#DCFCE7',
+  },
   passengerCountPillText: {
     fontSize: 9,
     fontWeight: '800',
     color: '#1D4ED8',
+  },
+  passengerCountPillArrivedText: {
+    color: '#15803D',
   },
 
   remainingDistCardSecondary: {
@@ -1438,17 +1507,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Next Stop Notice
+  // Active Next Stop Notice Banner
   nextStopNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 10,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     marginVertical: 6,
+  },
+  nextStopNoticeArrived: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
+  },
+  nextStopNoticeAllDone: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
   },
   nextStopIconCircle: {
     width: 28,
@@ -1469,24 +1546,28 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
-  showOnMapBtnSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
+  departStopBtn: {
     backgroundColor: '#EFF6FF',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#BFDBFE',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
-  showOnMapBtnSmallText: {
+  departStopBtnReady: {
+    backgroundColor: '#10B981',
+    borderColor: '#059669',
+  },
+  departStopBtnText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#006FD8',
   },
+  departStopBtnReadyText: {
+    color: '#FFFFFF',
+  },
 
-  // Main Action: Launch Live Google Maps Navigation
+  // Main Action: Multi-Stop Google Maps Navigation
   btnOpenGoogleMaps: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1504,33 +1585,9 @@ const styles = StyleSheet.create({
   },
   btnOpenGoogleMapsText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.2,
-  },
-
-  // Quick Maps Row
-  quickMapsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  quickMapPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  quickMapPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#006FD8',
   },
 
   // Trip Secondary Controls
@@ -1603,6 +1660,18 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
+  pickupStopCardActive: {
+    borderColor: '#93C5FD',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#006FD8',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  pickupStopCardPassed: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.85,
+  },
   stopHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1622,26 +1691,45 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
+  stopLocationNamePassed: {
+    color: '#64748B',
+    textDecorationLine: 'line-through',
+  },
   stopTimeText: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 1,
   },
-  stopMapPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#EFF6FF',
+  stopStatusBadge: {
     paddingVertical: 3,
     paddingHorizontal: 7,
     borderRadius: 6,
+  },
+  stopStatusBadgeActive: {
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
-  stopMapPillText: {
-    fontSize: 11,
+  stopStatusBadgeActiveText: {
+    fontSize: 10,
     fontWeight: '800',
     color: '#006FD8',
+  },
+  stopStatusBadgeUpcoming: {
+    backgroundColor: '#F1F5F9',
+  },
+  stopStatusBadgeUpcomingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  stopStatusBadgePassed: {
+    backgroundColor: '#F1F5F9',
+  },
+  stopStatusBadgePassedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
   passengerRow: {
     flexDirection: 'row',
@@ -1649,14 +1737,34 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: 8,
   },
+  passengerRowMissed: {
+    opacity: 0.85,
+  },
   passengerNameText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
+  passengerNameTextMissed: {
+    color: '#991B1B',
+  },
+  missedTripTag: {
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 1,
+    paddingHorizontal: 5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  missedTripTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B91C1C',
+  },
   passengerSeatText: {
     fontSize: 11,
     color: '#64748B',
+    marginTop: 1,
   },
   callSmallBtn: {
     width: 28,
@@ -1675,10 +1783,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 8,
+    minWidth: 70,
+    alignItems: 'center',
   },
   boardCheckBtnDone: {
     backgroundColor: '#ECFDF5',
     borderColor: '#A7F3D0',
+  },
+  boardCheckBtnMissed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  boardCheckBtnDisabled: {
+    opacity: 0.7,
   },
   boardCheckText: {
     fontSize: 11,
@@ -1687,5 +1804,14 @@ const styles = StyleSheet.create({
   },
   boardCheckTextDone: {
     color: '#059669',
+  },
+  boardCheckTextMissed: {
+    color: '#DC2626',
+  },
+  noPassengersText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: '#94A3B8',
+    paddingVertical: 4,
   },
 });
