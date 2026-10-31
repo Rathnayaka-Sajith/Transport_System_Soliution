@@ -21,7 +21,6 @@ const PNG_BANK_ACCOUNT = {
   accountName: 'PNG Express (Pvt) Ltd',
   accountNo: '1000 8492 8821',
   branch: 'Colombo Super Branch',
-  swiftCode: 'CCEYLKX',
 };
 
 // Standard Seat Price on Route 87
@@ -92,14 +91,14 @@ const sendWhatsAppMessage = async (phone, message) => {
       await Linking.openURL(webUrl);
     } catch (e) {
       Alert.alert(
-        'WhatsApp Alert',
-        `Could not open WhatsApp app directly. Formatted message for +${cleanPhone}:\n\n${message}`
+        'WhatsApp Notice',
+        `Unable to open WhatsApp app directly. Message ready for +${cleanPhone}:\n\n${message}`
       );
     }
   }
 };
 
-// Initial Mock Call-In and Online Reservations
+// Initial Mock Reservations (Seeded on Today: 2026-10-31)
 const INITIAL_RESERVATIONS = [
   {
     id: 'RES-8812',
@@ -108,11 +107,10 @@ const INITIAL_RESERVATIONS = [
     phone: '076 554 9911',
     dateKey: '2026-10-31',
     seats: [21, 22],
-    seatCount: 2,
-    pickup: 'Anuradhapura New Town Bus Stand',
+    pickup: 'Anuradhapura Stand',
     amount: 4800,
     status: 'PENDING_PAYMENT', // 'PENDING_PAYMENT' | 'CONFIRMED'
-    createdAt: '10:15 AM Today',
+    createdAt: '10:15 AM',
     bankRef: null,
   },
   {
@@ -122,11 +120,10 @@ const INITIAL_RESERVATIONS = [
     phone: '077 341 8820',
     dateKey: '2026-10-31',
     seats: [6, 7],
-    seatCount: 2,
     pickup: 'Thalawa Junction',
     amount: 4800,
     status: 'PENDING_PAYMENT',
-    createdAt: '09:40 AM Today',
+    createdAt: '09:40 AM',
     bankRef: null,
   },
   {
@@ -136,11 +133,10 @@ const INITIAL_RESERVATIONS = [
     phone: '077 123 9081',
     dateKey: '2026-10-31',
     seats: [1, 2],
-    seatCount: 2,
     pickup: 'Thambuththegama Central Depot',
     amount: 4800,
     status: 'CONFIRMED',
-    createdAt: 'Yesterday 04:30 PM',
+    createdAt: 'Yesterday',
     bankRef: 'Commercial Bank Slip #CB-9941',
   },
   {
@@ -150,11 +146,10 @@ const INITIAL_RESERVATIONS = [
     phone: '077 665 4433',
     dateKey: '2026-10-31',
     seats: [12, 13],
-    seatCount: 2,
     pickup: 'Thambuththegama Central Depot',
     amount: 4800,
     status: 'CONFIRMED',
-    createdAt: 'Yesterday 06:10 PM',
+    createdAt: 'Yesterday',
     bankRef: 'Bank of Ceylon Slip #BOC-1029',
   },
   {
@@ -164,11 +159,10 @@ const INITIAL_RESERVATIONS = [
     phone: '071 883 1920',
     dateKey: '2026-10-31',
     seats: [5],
-    seatCount: 1,
     pickup: 'Thalawa Junction',
     amount: 2400,
     status: 'CONFIRMED',
-    createdAt: 'Yesterday 08:20 PM',
+    createdAt: 'Yesterday',
     bankRef: 'Commercial Bank Slip #CB-8832',
   },
 ];
@@ -187,23 +181,25 @@ export default function ConductorDashboardScreen({ user }) {
 
   // Master Reservations State
   const [reservations, setReservations] = useState(INITIAL_RESERVATIONS);
-  const [reservationFilter, setReservationFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'CONFIRMED'
 
-  // Modal 1: Call-in Seat Reservation (Pending Reserve)
-  const [showReserveModal, setShowReserveModal] = useState(false);
+  // POP-UP WINDOW 1: Bus Seating Layout & Reservation Modal
+  const [showBusSeatingModal, setShowBusSeatingModal] = useState(false);
+  const [selectedSeatsForBooking, setSelectedSeatsForBooking] = useState([]);
   const [callerName, setCallerName] = useState('');
   const [callerPhone, setCallerPhone] = useState('');
-  const [callerSeatsCount, setCallerSeatsCount] = useState(2);
   const [callerPickup, setCallerPickup] = useState('Thambuththegama Central Depot');
   const [isSubmittingReserve, setIsSubmittingReserve] = useState(false);
 
-  // Modal 2: Verify Payment & Permanently Reserve
+  // Detail Inspector for an already booked/pending seat
+  const [inspectedSeatReservation, setInspectedSeatReservation] = useState(null);
+
+  // POP-UP WINDOW 2: Verify Payment & Confirm Permanently
   const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [activePendingRes, setActivePendingRes] = useState(null);
+  const [activePendingToVerify, setActivePendingToVerify] = useState(null);
   const [bankSlipRef, setBankSlipRef] = useState('');
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
 
-  // Modal 3: View Confirmed QR Ticket Pass
+  // POP-UP WINDOW 3: Digital Ticket QR Pass
   const [showQrModal, setShowQrModal] = useState(false);
   const [activeConfirmedRes, setActiveConfirmedRes] = useState(null);
 
@@ -213,7 +209,252 @@ export default function ConductorDashboardScreen({ user }) {
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
 
-  // Generate 7 days of the current week for quick horizontal carousel
+  // -------------------------------------------------------------
+  // CALENDAR CELL CLICK: DIRECTLY OPEN BUS SEATING POPUP WINDOW
+  // -------------------------------------------------------------
+  const handleDayClick = (dayDate, unlocked) => {
+    if (!unlocked) {
+      Alert.alert(
+        'Date Locked',
+        `Bookings are restricted strictly to the current active operational week (${formatDisplayDate(
+          weekStart
+        )} - ${formatDisplayDate(weekEnd)}).`
+      );
+      return;
+    }
+
+    // Set selected date and immediately open bus seating popup window!
+    setSelectedDate(dayDate);
+    setSelectedSeatsForBooking([]);
+    setCallerName('');
+    setCallerPhone('');
+    setInspectedSeatReservation(null);
+    setShowBusSeatingModal(true);
+  };
+
+  // Selected date key
+  const selectedDateKey = formatDateKey(selectedDate);
+
+  // Get seat info for the selected date (1 to 40)
+  const getSeatInfoForDate = (seatNum) => {
+    // 1. Is this seat currently selected for a new booking by the conductor?
+    if (selectedSeatsForBooking.includes(seatNum)) {
+      return {
+        seatNumber: seatNum,
+        status: 'SELECTED',
+        reservation: null,
+      };
+    }
+
+    // 2. Is this seat already booked/reserved on this date?
+    const foundRes = reservations.find(
+      (r) => r.dateKey === selectedDateKey && (r.seats || []).includes(seatNum)
+    );
+
+    if (foundRes) {
+      return {
+        seatNumber: seatNum,
+        status: foundRes.status, // 'PENDING_PAYMENT' | 'CONFIRMED'
+        reservation: foundRes,
+      };
+    }
+
+    // 3. Otherwise, vacant / available
+    return {
+      seatNumber: seatNum,
+      status: 'AVAILABLE',
+      reservation: null,
+    };
+  };
+
+  // Toggle seat selection on the bus map
+  const handleSeatPress = (seatNum) => {
+    const info = getSeatInfoForDate(seatNum);
+
+    if (info.status === 'AVAILABLE') {
+      // Toggle into selectedSeatsForBooking
+      setInspectedSeatReservation(null);
+      setSelectedSeatsForBooking((prev) =>
+        prev.includes(seatNum) ? prev.filter((s) => s !== seatNum) : [...prev, seatNum].sort((a, b) => a - b)
+      );
+    } else if (info.status === 'SELECTED') {
+      // Remove from selection
+      setSelectedSeatsForBooking((prev) => prev.filter((s) => s !== seatNum));
+    } else if (info.status === 'PENDING_PAYMENT') {
+      // Inspect pending reservation
+      setSelectedSeatsForBooking([]);
+      setInspectedSeatReservation(info.reservation);
+    } else if (info.status === 'CONFIRMED') {
+      // Inspect confirmed reservation
+      setSelectedSeatsForBooking([]);
+      setInspectedSeatReservation(info.reservation);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // SUBMIT PENDING RESERVATION & SEND WHATSAPP TO INPUT NUMBER
+  // -------------------------------------------------------------
+  const handleConfirmPendingReserve = async () => {
+    if (selectedSeatsForBooking.length === 0) {
+      Alert.alert('Select Seats', 'Please tap one or more vacant seats on the bus layout.');
+      return;
+    }
+    if (!callerName.trim()) {
+      Alert.alert('Required Field', 'Please enter customer name.');
+      return;
+    }
+    if (!callerPhone.trim() || callerPhone.trim().length < 9) {
+      Alert.alert('Required Field', 'Please enter a valid 10-digit WhatsApp phone number.');
+      return;
+    }
+
+    setIsSubmittingReserve(true);
+
+    const totalSeats = selectedSeatsForBooking.length;
+    const totalAmount = totalSeats * FARE_PER_SEAT;
+    const resId = `RES-${Math.floor(8820 + Math.random() * 900)}`;
+
+    const newReservation = {
+      id: resId,
+      ticketRef: null,
+      customerName: callerName.trim(),
+      phone: callerPhone.trim(),
+      dateKey: selectedDateKey,
+      seats: [...selectedSeatsForBooking],
+      pickup: callerPickup,
+      amount: totalAmount,
+      status: 'PENDING_PAYMENT',
+      createdAt: 'Just now',
+      bankRef: null,
+    };
+
+    setReservations((prev) => [newReservation, ...prev]);
+
+    // Prepare Official WhatsApp Message with PNG Bank Details
+    const waMessage = `🚌 *PNG EXPRESS - SEAT RESERVATION (PENDING PAYMENT)*
+
+Dear ${callerName.trim()},
+Your provisional seat reservation has been recorded by Conductor ${user?.name || 'Nimal Silva'} (Route 87: Thambuththegama ➔ Jaffna).
+
+📋 *Reservation Details:*
+• Ref Number: *${resId}*
+• Travel Date: *${formatDisplayDate(selectedDate)}*
+• Reserved Seats: *Seats ${selectedSeatsForBooking.join(', ')}* (${totalSeats} Seat${totalSeats > 1 ? 's' : ''})
+• Boarding Place: *${callerPickup}*
+• Total Amount Due: *LKR ${totalAmount.toLocaleString()}*
+
+🏦 *Official Bank Account for Payment:*
+• Bank: *${PNG_BANK_ACCOUNT.bankName}*
+• Account Name: *${PNG_BANK_ACCOUNT.accountName}*
+• Account Number: *${PNG_BANK_ACCOUNT.accountNo}*
+• Branch: *${PNG_BANK_ACCOUNT.branch}*
+
+📲 *To Confirm Your Seats:*
+Please deposit/transfer *LKR ${totalAmount.toLocaleString()}* and reply with your bank transfer slip / receipt to this WhatsApp chat. Once verified by our conductor, your permanent digital ticket and QR Code Pass will be issued immediately.
+
+Thank you for choosing PNG Express! Safe travels.`;
+
+    setIsSubmittingReserve(false);
+    const bookedPhone = callerPhone.trim();
+    const bookedSeats = [...selectedSeatsForBooking];
+
+    // Clear inputs and selection
+    setSelectedSeatsForBooking([]);
+    setCallerName('');
+    setCallerPhone('');
+
+    // Open WhatsApp directly to the customer's phone number
+    Alert.alert(
+      'Pending Reservation Saved',
+      `Seats ${bookedSeats.join(', ')} marked as Pending. Opening WhatsApp now to send PNG bank details to ${bookedPhone}...`,
+      [
+        {
+          text: 'Open WhatsApp ➔',
+          onPress: () => sendWhatsAppMessage(bookedPhone, waMessage),
+        },
+      ]
+    );
+  };
+
+  // -------------------------------------------------------------
+  // VERIFY PAYMENT & PERMANENTLY RESERVE (DISPATCH QR VIA WHATSAPP)
+  // -------------------------------------------------------------
+  const handleInitiatePaymentVerification = (res) => {
+    setActivePendingToVerify(res);
+    setBankSlipRef(`Slip #CB-${Math.floor(1000 + Math.random() * 9000)}`);
+    setShowVerifyModal(true);
+  };
+
+  const handleConfirmPermanentBooking = async () => {
+    if (!activePendingToVerify) return;
+
+    setIsVerifyingPayment(true);
+    const generatedTicketRef = `PNG-TKT-${Math.floor(2000 + Math.random() * 8000)}`;
+    const verifiedSlip = bankSlipRef.trim() || 'Direct Online Transfer Verified';
+
+    setReservations((prev) =>
+      prev.map((r) =>
+        r.id === activePendingToVerify.id
+          ? {
+              ...r,
+              status: 'CONFIRMED',
+              ticketRef: generatedTicketRef,
+              bankRef: verifiedSlip,
+            }
+          : r
+      )
+    );
+
+    const verifiedRes = {
+      ...activePendingToVerify,
+      status: 'CONFIRMED',
+      ticketRef: generatedTicketRef,
+      bankRef: verifiedSlip,
+    };
+
+    setShowVerifyModal(false);
+    setIsVerifyingPayment(false);
+    setInspectedSeatReservation(verifiedRes);
+
+    // Prepare WhatsApp Message with Confirmed Ticket and Digital QR Pass Link
+    const qrPassUrl = `https://pngexpress.lk/ticket/${generatedTicketRef}`;
+    const waTicketMessage = `✅ *PNG EXPRESS - OFFICIAL CONFIRMED TICKET & QR PASS*
+
+Dear ${activePendingToVerify.customerName},
+Your payment of *LKR ${activePendingToVerify.amount.toLocaleString()}* has been *VERIFIED* by the bus conductor! Your seats are now *PERMANENTLY RESERVED*.
+
+🎫 *Official Digital Ticket Pass:*
+• Ticket Number: *${generatedTicketRef}*
+• Passenger: *${activePendingToVerify.customerName}*
+• Date of Travel: *${formatDisplayDate(selectedDate)}*
+• Route: *Route 87 (Thambuththegama ➔ Jaffna)*
+• Bus Plate: *NB-4592 (Scania Luxury Touring)*
+• Confirmed Seats: *Seats ${activePendingToVerify.seats.join(', ')}*
+• Boarding Location: *${activePendingToVerify.pickup}*
+• Verification: *PAID & VERIFIED (${verifiedSlip})*
+
+📲 *Your Digital Ticket & QR Code Pass:*
+${qrPassUrl}
+
+Please show this digital ticket / QR pass to the bus crew when boarding. Have a safe and pleasant journey with PNG Express!`;
+
+    Alert.alert(
+      'Payment Verified & Seats Confirmed',
+      `Ticket ${generatedTicketRef} issued. Opening WhatsApp now to send the official QR Pass to ${activePendingToVerify.phone}...`,
+      [
+        {
+          text: 'Send QR Pass via WhatsApp ➔',
+          onPress: () => {
+            sendWhatsAppMessage(activePendingToVerify.phone, waTicketMessage);
+            setActiveConfirmedRes(verifiedRes);
+            setShowQrModal(true);
+          },
+        },
+      ]
+    );
+  };
+
+  // Fast Week Days (7 Unlocked Days)
   const currentWeekDays = useMemo(() => {
     const days = [];
     const temp = new Date(weekStart);
@@ -223,7 +464,6 @@ export default function ConductorDashboardScreen({ user }) {
       const isSelected = formatDateKey(selectedDate) === key;
       const isTodayDate = formatDateKey(today) === key;
 
-      // Count bookings for this day
       const dayBookings = reservations.filter((r) => r.dateKey === key);
       const pendingCount = dayBookings.filter((r) => r.status === 'PENDING_PAYMENT').length;
       const confirmedCount = dayBookings.filter((r) => r.status === 'CONFIRMED').length;
@@ -244,24 +484,19 @@ export default function ConductorDashboardScreen({ user }) {
     return days;
   }, [weekStart, selectedDate, today, reservations]);
 
-  // Generate Calendar Matrix for calendarMonth and calendarYear
+  // Full Month Matrix
   const calendarMatrix = useMemo(() => {
     const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1);
     const lastDayOfMonth = new Date(calendarYear, calendarMonth + 1, 0);
 
-    // Day of week for 1st of month: 0 (Sun) to 6 (Sat)
-    // Convert to Monday=0, ..., Sun=6
     const firstDayIndex = (firstDayOfMonth.getDay() + 6) % 7;
     const totalDays = lastDayOfMonth.getDate();
 
     const cells = [];
-
-    // Empty cells before first day
     for (let i = 0; i < firstDayIndex; i++) {
       cells.push({ empty: true, id: `empty-pre-${i}` });
     }
 
-    // Days of current month
     for (let d = 1; d <= totalDays; d++) {
       const dayDate = new Date(calendarYear, calendarMonth, d);
       const dateKey = formatDateKey(dayDate);
@@ -284,11 +519,9 @@ export default function ConductorDashboardScreen({ user }) {
         isSelected,
         hasPending,
         hasConfirmed,
-        bookingsCount: dayBookings.length,
       });
     }
 
-    // Fill remaining cells to complete grid
     const remaining = 7 - (cells.length % 7);
     if (remaining < 7) {
       for (let i = 0; i < remaining; i++) {
@@ -299,253 +532,14 @@ export default function ConductorDashboardScreen({ user }) {
     return cells;
   }, [calendarYear, calendarMonth, today, selectedDate, reservations, weekStart, weekEnd]);
 
-  // Filter reservations for the active selected date
-  const selectedDateKey = formatDateKey(selectedDate);
-  const activeDateReservations = useMemo(() => {
-    return reservations.filter((r) => {
-      if (r.dateKey !== selectedDateKey) return false;
-      if (reservationFilter === 'PENDING') return r.status === 'PENDING_PAYMENT';
-      if (reservationFilter === 'CONFIRMED') return r.status === 'CONFIRMED';
-      return true;
-    });
-  }, [reservations, selectedDateKey, reservationFilter]);
-
-  // Overall counts for selected date
-  const selectedDateTotal = reservations.filter((r) => r.dateKey === selectedDateKey);
-  const selectedDatePending = selectedDateTotal.filter((r) => r.status === 'PENDING_PAYMENT');
-  const selectedDateConfirmed = selectedDateTotal.filter((r) => r.status === 'CONFIRMED');
-  const totalBookedSeats = selectedDateTotal.reduce((sum, r) => sum + r.seatCount, 0);
-  const vacantSeats = Math.max(0, 40 - totalBookedSeats);
-
-  // Determine next available seats to assign for call-in booking
-  const getNextAvailableSeats = (quantity) => {
-    const bookedSeatSet = new Set();
-    selectedDateTotal.forEach((r) => {
-      (r.seats || []).forEach((s) => bookedSeatSet.add(s));
-    });
-
-    const allocated = [];
-    for (let s = 1; s <= 40 && allocated.length < quantity; s++) {
-      if (!bookedSeatSet.has(s)) {
-        allocated.push(s);
-      }
-    }
-    return allocated;
-  };
-
-  // Handle clicking a date on the calendar
-  const handleSelectCalendarDate = (cell) => {
-    if (!cell.unlocked) {
-      Alert.alert(
-        'Date Locked',
-        `Bookings are restricted strictly to the current operational week (${formatDisplayDate(
-          weekStart
-        )} - ${formatDisplayDate(weekEnd)}).`
-      );
-      return;
-    }
-    setSelectedDate(cell.date);
-  };
-
-  // -------------------------------------------------------------
-  // STEP 1: CREATE CALL-IN PENDING RESERVATION & SEND BANK INFO VIA WHATSAPP
-  // -------------------------------------------------------------
-  const handleCreatePendingReserve = async () => {
-    if (!callerName.trim()) {
-      Alert.alert('Required Field', 'Please enter caller customer name.');
-      return;
-    }
-    if (!callerPhone.trim() || callerPhone.trim().length < 9) {
-      Alert.alert('Required Field', 'Please enter a valid 10-digit WhatsApp phone number.');
-      return;
-    }
-
-    setIsSubmittingReserve(true);
-
-    const allocatedSeats = getNextAvailableSeats(callerSeatsCount);
-    const totalAmount = callerSeatsCount * FARE_PER_SEAT;
-    const resId = `RES-${Math.floor(8820 + Math.random() * 900)}`;
-
-    const newReservation = {
-      id: resId,
-      ticketRef: null,
-      customerName: callerName.trim(),
-      phone: callerPhone.trim(),
-      dateKey: selectedDateKey,
-      seats: allocatedSeats,
-      seatCount: callerSeatsCount,
-      pickup: callerPickup,
-      amount: totalAmount,
-      status: 'PENDING_PAYMENT',
-      createdAt: 'Just now',
-      bankRef: null,
-    };
-
-    setReservations((prev) => [newReservation, ...prev]);
-    setShowReserveModal(false);
-    setIsSubmittingReserve(false);
-
-    // Prepare WhatsApp Message with PNG Express Bank Details
-    const waMessage = `🚌 *PNG EXPRESS - SEAT RESERVATION (PENDING PAYMENT)*
-
-Dear ${callerName.trim()},
-Your provisional seat reservation has been recorded by Conductor ${user?.name || 'Nimal Silva'} (Route 87: Thambuththegama ➔ Jaffna).
-
-📋 *Reservation Details:*
-• Ref Number: *${resId}*
-• Date of Travel: *${formatDisplayDate(selectedDate)}*
-• Reserved Seats: *Seats ${allocatedSeats.join(', ')}* (${callerSeatsCount} Seats)
-• Boarding Place: *${callerPickup}*
-• Total Amount Due: *LKR ${totalAmount.toLocaleString()}*
-
-🏦 *Official Bank Account for Payment:*
-• Bank: *${PNG_BANK_ACCOUNT.bankName}*
-• Account Name: *${PNG_BANK_ACCOUNT.accountName}*
-• Account Number: *${PNG_BANK_ACCOUNT.accountNo}*
-• Branch: *${PNG_BANK_ACCOUNT.branch}*
-
-📲 *To Confirm Your Seats:*
-Please deposit/transfer *LKR ${totalAmount.toLocaleString()}* and reply with your bank transfer slip / receipt to this WhatsApp chat. Once verified by our conductor, your permanent digital ticket and QR Code Pass will be issued immediately.
-
-Thank you for choosing PNG Express! Safe travels.`;
-
-    Alert.alert(
-      'Pending Reservation Saved',
-      `Seats ${allocatedSeats.join(', ')} held provisionally. Opening WhatsApp now to send PNG bank details to ${callerPhone.trim()}...`,
-      [
-        {
-          text: 'Open WhatsApp ➔',
-          onPress: () => sendWhatsAppMessage(callerPhone.trim(), waMessage),
-        },
-      ]
-    );
-
-    // Reset Form
-    setCallerName('');
-    setCallerPhone('');
-    setCallerSeatsCount(2);
-  };
-
-  // -------------------------------------------------------------
-  // STEP 2: VERIFY PAYMENT & PERMANENTLY RESERVE (SEND QR PASS VIA WHATSAPP)
-  // -------------------------------------------------------------
-  const handleInitiateVerification = (res) => {
-    setActivePendingRes(res);
-    setBankSlipRef(`Slip #CB-${Math.floor(1000 + Math.random() * 9000)}`);
-    setShowVerifyModal(true);
-  };
-
-  const handleConfirmPermanentBooking = async () => {
-    if (!activePendingRes) return;
-
-    setIsVerifyingPayment(true);
-    const generatedTicketRef = `PNG-TKT-${Math.floor(2000 + Math.random() * 8000)}`;
-    const verifiedSlip = bankSlipRef.trim() || 'Direct Online Transfer Verified';
-
-    // Update reservation status to CONFIRMED
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === activePendingRes.id
-          ? {
-              ...r,
-              status: 'CONFIRMED',
-              ticketRef: generatedTicketRef,
-              bankRef: verifiedSlip,
-              verifiedAt: 'Just now',
-            }
-          : r
-      )
-    );
-
-    const verifiedRes = {
-      ...activePendingRes,
-      status: 'CONFIRMED',
-      ticketRef: generatedTicketRef,
-      bankRef: verifiedSlip,
-    };
-
-    setShowVerifyModal(false);
-    setIsVerifyingPayment(false);
-
-    // Prepare WhatsApp Message with Confirmed Ticket and Digital QR Pass Link
-    const qrPassUrl = `https://pngexpress.lk/ticket/${generatedTicketRef}`;
-    const waTicketMessage = `✅ *PNG EXPRESS - OFFICIAL CONFIRMED TICKET & QR PASS*
-
-Dear ${activePendingRes.customerName},
-Your payment of *LKR ${activePendingRes.amount.toLocaleString()}* has been *VERIFIED* by the bus conductor! Your seats are now *PERMANENTLY RESERVED*.
-
-🎫 *Official Digital Ticket Pass:*
-• Ticket Number: *${generatedTicketRef}*
-• Passenger: *${activePendingRes.customerName}*
-• Date of Travel: *${formatDisplayDate(selectedDate)}*
-• Route: *Route 87 (Thambuththegama ➔ Jaffna)*
-• Bus Plate: *NB-4592 (Scania Luxury Touring)*
-• Assigned Seats: *Seats ${activePendingRes.seats.join(', ')}*
-• Boarding Location: *${activePendingRes.pickup}*
-• Verification: *PAID & VERIFIED (${verifiedSlip})*
-
-📲 *Your Digital Ticket & QR Code Pass:*
-${qrPassUrl}
-
-Please show this digital ticket / QR pass to the bus crew when boarding. Have a safe and pleasant journey with PNG Express!`;
-
-    Alert.alert(
-      'Payment Verified & Seats Confirmed',
-      `Ticket ${generatedTicketRef} issued. Opening WhatsApp now to dispatch the official QR Pass to ${activePendingRes.phone}...`,
-      [
-        {
-          text: 'Send QR Pass via WhatsApp ➔',
-          onPress: () => {
-            sendWhatsAppMessage(activePendingRes.phone, waTicketMessage);
-            // Also open on-screen QR modal for conductor view
-            setActiveConfirmedRes(verifiedRes);
-            setShowQrModal(true);
-          },
-        },
-      ]
-    );
-  };
-
-  // Month navigation helpers
-  const handlePrevMonth = () => {
-    if (calendarMonth === 0) {
-      setCalendarMonth(11);
-      setCalendarYear((y) => y - 1);
-    } else {
-      setCalendarMonth((m) => m - 1);
-    }
-  };
-
-  const handleNextMonth = () => {
-    if (calendarMonth === 11) {
-      setCalendarMonth(0);
-      setCalendarYear((y) => y + 1);
-    } else {
-      setCalendarMonth((m) => m + 1);
-    }
-  };
-
   const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* 1. Conductor Operational Profile Header */}
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      {/* 1. Header Bar */}
       <View style={styles.topProfileBar}>
         <View style={styles.profileBadgeCol}>
           <Text style={styles.roleTitle}>Conductor Desk</Text>
@@ -560,16 +554,16 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
         </View>
       </View>
 
-      {/* 2. Unlocked Week Alert Banner */}
+      {/* 2. Instruction Banner */}
       <View style={styles.weekNoticeCard}>
         <View style={styles.weekNoticeIconCircle}>
           <Ionicons name="calendar" size={18} color="#006FD8" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.weekNoticeTitle}>Current Operational Week Unlocked</Text>
+          <Text style={styles.weekNoticeTitle}>Tap Any Date to Open Bus Seating</Text>
           <Text style={styles.weekNoticeSub}>
             Only the active operational week ({formatDisplayDate(weekStart)} –{' '}
-            {formatDisplayDate(weekEnd)}) is unlocked for call-in reservations.
+            {formatDisplayDate(weekEnd)}) is unlocked. Tap any active date to view seating & reserve seats pendingly.
           </Text>
         </View>
       </View>
@@ -589,7 +583,7 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
               item.isSelected && styles.weekDayPillSelected,
               item.isTodayDate && styles.weekDayPillToday,
             ]}
-            onPress={() => setSelectedDate(item.date)}
+            onPress={() => handleDayClick(item.date, true)}
             activeOpacity={0.8}
           >
             <Text
@@ -631,9 +625,8 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
         ))}
       </ScrollView>
 
-      {/* 4. Full Month Interactive Calendar View */}
+      {/* 4. Full Month Interactive Calendar */}
       <View style={styles.calendarCard}>
-        {/* Month Header & Month Navigation */}
         <View style={styles.calendarHeaderRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="calendar-outline" size={18} color="#006FD8" />
@@ -645,7 +638,14 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
           <View style={styles.monthNavControls}>
             <TouchableOpacity
               style={styles.monthNavBtn}
-              onPress={handlePrevMonth}
+              onPress={() => {
+                if (calendarMonth === 0) {
+                  setCalendarMonth(11);
+                  setCalendarYear((y) => y - 1);
+                } else {
+                  setCalendarMonth((m) => m - 1);
+                }
+              }}
               activeOpacity={0.7}
             >
               <Feather name="chevron-left" size={18} color="#0F172A" />
@@ -653,7 +653,14 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
 
             <TouchableOpacity
               style={styles.monthNavBtn}
-              onPress={handleNextMonth}
+              onPress={() => {
+                if (calendarMonth === 11) {
+                  setCalendarMonth(0);
+                  setCalendarYear((y) => y + 1);
+                } else {
+                  setCalendarMonth((m) => m + 1);
+                }
+              }}
               activeOpacity={0.7}
             >
               <Feather name="chevron-right" size={18} color="#0F172A" />
@@ -670,7 +677,7 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
           ))}
         </View>
 
-        {/* Days Grid */}
+        {/* Calendar Days Matrix */}
         <View style={styles.daysGrid}>
           {calendarMatrix.map((cell) => {
             if (cell.empty) {
@@ -687,10 +694,9 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
                   cell.isSelected && styles.dayCellSelected,
                   cell.isTodayDate && !cell.isSelected && styles.dayCellTodayBorder,
                 ]}
-                onPress={() => handleSelectCalendarDate(cell)}
+                onPress={() => handleDayClick(cell.date, cell.unlocked)}
                 activeOpacity={cell.unlocked ? 0.75 : 0.9}
               >
-                {/* Day Number */}
                 <Text
                   style={[
                     styles.dayCellText,
@@ -702,7 +708,6 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
                   {cell.dayNumber}
                 </Text>
 
-                {/* Lock or Status Indicators */}
                 {!cell.unlocked ? (
                   <View style={styles.lockedMiniIcon}>
                     <Ionicons name="lock-closed" size={9} color="#94A3B8" />
@@ -718,11 +723,11 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
           })}
         </View>
 
-        {/* Calendar Footer Legend */}
+        {/* Legend */}
         <View style={styles.calendarLegendRow}>
           <View style={styles.legendItem}>
             <View style={[styles.legendSquare, { backgroundColor: '#FFFFFF', borderColor: '#006FD8', borderWidth: 1.5 }]} />
-            <Text style={styles.legendLabel}>Current Week (Unlocked)</Text>
+            <Text style={styles.legendLabel}>Active (Tap to Open Bus)</Text>
           </View>
 
           <View style={styles.legendItem}>
@@ -732,12 +737,12 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
-            <Text style={styles.legendLabel}>Pending Slip</Text>
+            <Text style={styles.legendLabel}>Pending Reserve</Text>
           </View>
         </View>
       </View>
 
-      {/* 5. Selected Date Summary & Call-In Action Header */}
+      {/* 5. Selected Day Direct Action Box */}
       <View style={styles.dateActionCard}>
         <View style={styles.dateActionTopRow}>
           <View>
@@ -745,449 +750,401 @@ Please show this digital ticket / QR pass to the bus crew when boarding. Have a 
               {formatDisplayDate(selectedDate)}
             </Text>
             <Text style={styles.selectedDateSub}>
-              Route 87: Thambuththegama ➔ Jaffna • 40 Seats Total
+              Route 87: Thambuththegama ➔ Jaffna (Bus NB-4592)
             </Text>
           </View>
 
-          {/* Call-In Reservation Action Button */}
+          {/* Large prominent button to open Bus Seating Window directly */}
           <TouchableOpacity
-            style={styles.btnOpenCallIn}
-            onPress={() => setShowReserveModal(true)}
+            style={styles.btnOpenBusSeating}
+            onPress={() => {
+              setSelectedSeatsForBooking([]);
+              setCallerName('');
+              setCallerPhone('');
+              setInspectedSeatReservation(null);
+              setShowBusSeatingModal(true);
+            }}
             activeOpacity={0.85}
           >
-            <Ionicons name="call" size={15} color="#FFFFFF" />
-            <Text style={styles.btnOpenCallInText}>New Call-In Booking</Text>
+            <Ionicons name="bus" size={16} color="#FFFFFF" />
+            <Text style={styles.btnOpenBusSeatingText}>Open Bus Seating</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Seat Metrics Row */}
-        <View style={styles.seatMetricsRow}>
-          <View style={styles.seatMetricBox}>
-            <Text style={styles.seatMetricLabel}>Booked Seats</Text>
-            <Text style={styles.seatMetricValueBold}>{totalBookedSeats} / 40</Text>
-          </View>
-
-          <View style={styles.seatMetricDivider} />
-
-          <View style={styles.seatMetricBox}>
-            <Text style={styles.seatMetricLabel}>Vacant Available</Text>
-            <Text style={[styles.seatMetricValueBold, { color: '#059669' }]}>
-              {vacantSeats} Seats
-            </Text>
-          </View>
-
-          <View style={styles.seatMetricDivider} />
-
-          <View style={styles.seatMetricBox}>
-            <Text style={styles.seatMetricLabel}>Awaiting Bank Slip</Text>
-            <Text style={[styles.seatMetricValueBold, { color: '#D97706' }]}>
-              {selectedDatePending.length} Callers
-            </Text>
-          </View>
-        </View>
       </View>
-
-      {/* 6. Filter Segment: Pending vs Confirmed */}
-      <View style={styles.filterSegmentRow}>
-        <TouchableOpacity
-          style={[
-            styles.filterSegmentBtn,
-            reservationFilter === 'ALL' && styles.filterSegmentBtnActive,
-          ]}
-          onPress={() => setReservationFilter('ALL')}
-        >
-          <Text
-            style={[
-              styles.filterSegmentText,
-              reservationFilter === 'ALL' && styles.filterSegmentTextActive,
-            ]}
-          >
-            All Bookings ({selectedDateTotal.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterSegmentBtn,
-            reservationFilter === 'PENDING' && styles.filterSegmentBtnActive,
-          ]}
-          onPress={() => setReservationFilter('PENDING')}
-        >
-          <Text
-            style={[
-              styles.filterSegmentText,
-              reservationFilter === 'PENDING' && styles.filterSegmentTextActive,
-            ]}
-          >
-            ⏳ Pending ({selectedDatePending.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterSegmentBtn,
-            reservationFilter === 'CONFIRMED' && styles.filterSegmentBtnActive,
-          ]}
-          onPress={() => setReservationFilter('CONFIRMED')}
-        >
-          <Text
-            style={[
-              styles.filterSegmentText,
-              reservationFilter === 'CONFIRMED' && styles.filterSegmentTextActive,
-            ]}
-          >
-            ✅ Confirmed ({selectedDateConfirmed.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 7. Active Reservations List */}
-      <View style={styles.reservationsListWrapper}>
-        {activeDateReservations.length === 0 ? (
-          <View style={styles.emptyBookingsCard}>
-            <Ionicons name="clipboard-outline" size={32} color="#94A3B8" />
-            <Text style={styles.emptyBookingsTitle}>No reservations on this date</Text>
-            <Text style={styles.emptyBookingsSub}>
-              Tap "New Call-In Booking" to reserve seats for customers calling over the phone.
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyAddBtn}
-              onPress={() => setShowReserveModal(true)}
-            >
-              <Text style={styles.emptyAddBtnText}>+ Create Call-In Booking</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          activeDateReservations.map((item) => {
-            const isPending = item.status === 'PENDING_PAYMENT';
-
-            return (
-              <View
-                key={item.id}
-                style={[
-                  styles.bookingCard,
-                  isPending ? styles.bookingCardPending : styles.bookingCardConfirmed,
-                ]}
-              >
-                {/* Booking Card Header */}
-                <View style={styles.bookingCardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.customerNameMain}>{item.customerName}</Text>
-                      {isPending ? (
-                        <View style={styles.badgePending}>
-                          <Text style={styles.badgePendingText}>Pending Slip</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.badgeConfirmed}>
-                          <Text style={styles.badgeConfirmedText}>Permanently Reserved</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <Text style={styles.customerPhoneSub}>
-                      📞 {item.phone} • Booked {item.createdAt}
-                    </Text>
-                  </View>
-
-                  {/* WhatsApp Direct Chat Button */}
-                  <TouchableOpacity
-                    style={styles.iconChatBtn}
-                    onPress={() =>
-                      sendWhatsAppMessage(
-                        item.phone,
-                        `Hello ${item.customerName}, this is PNG Express Conductor ${user?.name || 'Nimal Silva'} regarding your seat booking.`
-                      )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Booking Details Grid */}
-                <View style={styles.bookingDetailsBox}>
-                  <View style={styles.bookingDetailRow}>
-                    <Text style={styles.bookingDetailLabel}>Assigned Seats:</Text>
-                    <Text style={styles.bookingDetailValueSeats}>
-                      Seats {item.seats.join(', ')} ({item.seatCount} Seat{item.seatCount > 1 ? 's' : ''})
-                    </Text>
-                  </View>
-
-                  <View style={styles.bookingDetailRow}>
-                    <Text style={styles.bookingDetailLabel}>Pickup Point:</Text>
-                    <Text style={styles.bookingDetailValue}>{item.pickup}</Text>
-                  </View>
-
-                  <View style={styles.bookingDetailRow}>
-                    <Text style={styles.bookingDetailLabel}>Total Fare:</Text>
-                    <Text style={styles.bookingDetailValueFare}>
-                      LKR {item.amount.toLocaleString()}
-                    </Text>
-                  </View>
-
-                  {!isPending && item.ticketRef && (
-                    <View style={styles.bookingDetailRow}>
-                      <Text style={styles.bookingDetailLabel}>Ticket Pass #:</Text>
-                      <Text style={styles.bookingDetailValueTicket}>{item.ticketRef}</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Primary Action Button Based on Status */}
-                {isPending ? (
-                  <View style={styles.pendingActionRow}>
-                    <TouchableOpacity
-                      style={styles.btnResendBankInfo}
-                      onPress={() => {
-                        const msg = `🚌 *PNG EXPRESS - BANK DETAILS REMINDER*
-
-Dear ${item.customerName},
-Here are our official bank details to complete your pending seat reservation (Seats ${item.seats.join(
-                          ', '
-                        )}):
-
-• Bank: ${PNG_BANK_ACCOUNT.bankName}
-• Account: ${PNG_BANK_ACCOUNT.accountNo}
-• Account Name: ${PNG_BANK_ACCOUNT.accountName}
-• Amount: LKR ${item.amount.toLocaleString()}
-
-Please reply with your transfer slip to receive your digital ticket QR code.`;
-                        sendWhatsAppMessage(item.phone, msg);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Ionicons name="logo-whatsapp" size={15} color="#006FD8" />
-                      <Text style={styles.btnResendBankInfoText}>Re-send Bank Details</Text>
-                    </TouchableOpacity>
-
-                    {/* KEY ACTION: VERIFY PAYMENT & PERMANENTLY RESERVE */}
-                    <TouchableOpacity
-                      style={styles.btnVerifyPaymentMain}
-                      onPress={() => handleInitiateVerification(item)}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
-                      <Text style={styles.btnVerifyPaymentMainText}>
-                        Verify Payment & Reserve
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.confirmedActionRow}>
-                    {/* VIEW & RE-SEND QR PASS */}
-                    <TouchableOpacity
-                      style={styles.btnViewQrPass}
-                      onPress={() => {
-                        setActiveConfirmedRes(item);
-                        setShowQrModal(true);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="qr-code" size={15} color="#006FD8" />
-                      <Text style={styles.btnViewQrPassText}>View Ticket QR Pass</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.btnResendQrWa}
-                      onPress={() => {
-                        const passMsg = `✅ *PNG EXPRESS - CONFIRMED TICKET QR PASS*
-
-Dear ${item.customerName},
-Your confirmed ticket for ${formatDisplayDate(selectedDate)}:
-• Ticket Number: *${item.ticketRef}*
-• Seats: *Seats ${item.seats.join(', ')}*
-• Pickup: *${item.pickup}*
-• Digital Ticket & QR Code: https://pngexpress.lk/ticket/${item.ticketRef}
-
-Please show this to the bus conductor at boarding.`;
-                        sendWhatsAppMessage(item.phone, passMsg);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Ionicons name="share-social" size={15} color="#059669" />
-                      <Text style={styles.btnResendQrWaText}>Send WhatsApp QR</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            );
-          })
-        )}
-      </View>
-
-      <View style={{ height: 40 }} />
 
       {/* ============================================================= */}
-      {/* MODAL 1: CALL-IN SEAT RESERVATION (PENDING RESERVE)           */}
+      {/* POP-UP WINDOW: BUS SEATING & CALL-IN PENDING RESERVATION       */}
       {/* ============================================================= */}
       <Modal
-        visible={showReserveModal}
+        visible={showBusSeatingModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowReserveModal(false)}
+        onRequestClose={() => setShowBusSeatingModal(false)}
       >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowReserveModal(false)}
+          onPress={() => setShowBusSeatingModal(false)}
         >
           <TouchableOpacity
-            style={styles.modalCard}
+            style={styles.busModalCard}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={styles.modalCallIconCircle}>
-                  <Ionicons name="call" size={18} color="#006FD8" />
+                <View style={styles.modalBusIconCircle}>
+                  <Ionicons name="bus" size={20} color="#006FD8" />
                 </View>
                 <View>
-                  <Text style={styles.modalHeaderTitle}>Call-In Seat Reservation</Text>
+                  <Text style={styles.modalHeaderTitle}>
+                    Bus Seating • {formatDisplayDate(selectedDate)}
+                  </Text>
                   <Text style={styles.modalHeaderSub}>
-                    Travel Date: {formatDisplayDate(selectedDate)}
+                    Coach NB-4592 • Tap vacant seats to reserve pendingly
                   </Text>
                 </View>
               </View>
 
               <TouchableOpacity
-                onPress={() => setShowReserveModal(false)}
+                onPress={() => setShowBusSeatingModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Feather name="x" size={20} color="#64748B" />
+                <Feather name="x" size={22} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            {/* Input Form */}
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* Customer Name */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Customer / Caller Name *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g. Sanjeewa Wickramasinghe"
-                  placeholderTextColor="#94A3B8"
-                  value={callerName}
-                  onChangeText={setCallerName}
-                />
+            {/* Scrollable Bus Interior Layout & Form */}
+            <ScrollView
+              style={{ maxHeight: 520 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            >
+              {/* Color Legend */}
+              <View style={styles.busLegendRow}>
+                <View style={styles.busLegendItem}>
+                  <View style={[styles.seatLegendBox, styles.seatLegendAvailable]} />
+                  <Text style={styles.busLegendLabel}>Vacant</Text>
+                </View>
+
+                <View style={styles.busLegendItem}>
+                  <View style={[styles.seatLegendBox, styles.seatLegendSelected]} />
+                  <Text style={styles.busLegendLabel}>Selected</Text>
+                </View>
+
+                <View style={styles.busLegendItem}>
+                  <View style={[styles.seatLegendBox, styles.seatLegendPending]} />
+                  <Text style={styles.busLegendLabel}>Pending Slip</Text>
+                </View>
+
+                <View style={styles.busLegendItem}>
+                  <View style={[styles.seatLegendBox, styles.seatLegendConfirmed]} />
+                  <Text style={styles.busLegendLabel}>Confirmed</Text>
+                </View>
               </View>
 
-              {/* Customer WhatsApp Phone */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>WhatsApp Mobile Number *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g. 077 892 1144"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={callerPhone}
-                  onChangeText={setCallerPhone}
-                />
-                <Text style={styles.inputHelpText}>
-                  Bank payment details will be dispatched directly to this WhatsApp number.
-                </Text>
+              {/* Front Cabin Banner */}
+              <View style={styles.frontCabinBanner}>
+                <Ionicons name="shield-checkmark" size={14} color="#64748B" />
+                <Text style={styles.frontCabinText}>FRONT • DRIVER CABIN & DOOR</Text>
               </View>
 
-              {/* Seats Quantity Counter */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Number of Seats to Reserve</Text>
-                <View style={styles.counterRow}>
-                  <TouchableOpacity
-                    style={styles.counterBtn}
-                    onPress={() => setCallerSeatsCount((c) => Math.max(1, c - 1))}
-                  >
-                    <Feather name="minus" size={16} color="#0F172A" />
-                  </TouchableOpacity>
+              {/* 40-Seat Coach Layout (10 Rows × 4 Seats: Left Pair, Aisle, Right Pair) */}
+              <View style={styles.busCoachBody}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rowIdx) => {
+                  const s1 = (rowIdx - 1) * 4 + 1;
+                  const s2 = (rowIdx - 1) * 4 + 2;
+                  const s3 = (rowIdx - 1) * 4 + 3;
+                  const s4 = (rowIdx - 1) * 4 + 4;
 
-                  <View style={styles.counterDisplay}>
-                    <Text style={styles.counterNumberText}>{callerSeatsCount}</Text>
-                    <Text style={styles.counterUnitText}>
-                      Seat{callerSeatsCount > 1 ? 's' : ''}
+                  const renderSeatBtn = (seatNum) => {
+                    const info = getSeatInfoForDate(seatNum);
+                    const isAvailable = info.status === 'AVAILABLE';
+                    const isSelected = info.status === 'SELECTED';
+                    const isPending = info.status === 'PENDING_PAYMENT';
+                    const isConfirmed = info.status === 'CONFIRMED';
+
+                    return (
+                      <TouchableOpacity
+                        key={seatNum}
+                        style={[
+                          styles.seatItem,
+                          isAvailable && styles.seatAvailable,
+                          isSelected && styles.seatSelected,
+                          isPending && styles.seatPending,
+                          isConfirmed && styles.seatConfirmed,
+                        ]}
+                        onPress={() => handleSeatPress(seatNum)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.seatNumberText,
+                            isSelected && styles.seatNumberTextWhite,
+                            isPending && styles.seatNumberTextPending,
+                            isConfirmed && styles.seatNumberTextConfirmed,
+                          ]}
+                        >
+                          {seatNum}
+                        </Text>
+                        {isSelected && <Text style={styles.seatMiniBadge}>✓</Text>}
+                        {isPending && <Text style={styles.seatMiniBadge}>⏳</Text>}
+                        {isConfirmed && <Text style={styles.seatMiniBadge}>★</Text>}
+                      </TouchableOpacity>
+                    );
+                  };
+
+                  return (
+                    <View key={rowIdx} style={styles.seatRow}>
+                      {/* Left Pair (Window & Aisle) */}
+                      <View style={styles.seatPair}>
+                        {renderSeatBtn(s1)}
+                        {renderSeatBtn(s2)}
+                      </View>
+
+                      {/* Walking Aisle */}
+                      <View style={styles.aisleGap}>
+                        <Text style={styles.aisleText}>{rowIdx}</Text>
+                      </View>
+
+                      {/* Right Pair (Aisle & Window) */}
+                      <View style={styles.seatPair}>
+                        {renderSeatBtn(s3)}
+                        {renderSeatBtn(s4)}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* SECTION A: WHEN CONDUCTOR SELECTS SEATS -> SHOW CUSTOMER INFO FORM */}
+              {selectedSeatsForBooking.length > 0 && (
+                <View style={styles.reservationFormBox}>
+                  <View style={styles.reservationFormHeader}>
+                    <Ionicons name="create-outline" size={18} color="#006FD8" />
+                    <Text style={styles.reservationFormTitle}>
+                      Reserve Seats: {selectedSeatsForBooking.join(', ')} ({selectedSeatsForBooking.length} Seat{selectedSeatsForBooking.length > 1 ? 's' : ''})
                     </Text>
                   </View>
 
+                  {/* Customer / Caller Name */}
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>Customer / Caller Name *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="e.g. Sanjeewa Wickramasinghe"
+                      placeholderTextColor="#94A3B8"
+                      value={callerName}
+                      onChangeText={setCallerName}
+                    />
+                  </View>
+
+                  {/* WhatsApp Mobile Number */}
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>WhatsApp Mobile Number *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="e.g. 077 892 1144"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="phone-pad"
+                      value={callerPhone}
+                      onChangeText={setCallerPhone}
+                    />
+                    <Text style={styles.inputHelpText}>
+                      PNG bank account details will be sent automatically to this WhatsApp number.
+                    </Text>
+                  </View>
+
+                  {/* Boarding Point */}
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>Boarding / Pickup Stop</Text>
+                    <View style={styles.pickupPillsGrid}>
+                      {[
+                        'Thambuththegama Central Depot',
+                        'Thalawa Junction',
+                        'Anuradhapura Stand',
+                        'Vavuniya Rest Stop',
+                      ].map((stop) => (
+                        <TouchableOpacity
+                          key={stop}
+                          style={[
+                            styles.pickupPill,
+                            callerPickup === stop && styles.pickupPillActive,
+                          ]}
+                          onPress={() => setCallerPickup(stop)}
+                        >
+                          <Text
+                            style={[
+                              styles.pickupPillText,
+                              callerPickup === stop && styles.pickupPillTextActive,
+                            ]}
+                          >
+                            {stop}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Fare Summary */}
+                  <View style={styles.fareNoticeRow}>
+                    <View>
+                      <Text style={styles.fareNoticeLabel}>Total Amount Due:</Text>
+                      <Text style={styles.fareNoticeValue}>
+                        LKR {(selectedSeatsForBooking.length * FARE_PER_SEAT).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.fareNoticeSub}>
+                      LKR 2,400 × {selectedSeatsForBooking.length}
+                    </Text>
+                  </View>
+
+                  {/* SUBMIT BUTTON: CONFIRM PENDING & SEND WHATSAPP */}
                   <TouchableOpacity
-                    style={styles.counterBtn}
-                    onPress={() => setCallerSeatsCount((c) => Math.min(6, c + 1))}
+                    style={styles.btnConfirmReserveMain}
+                    onPress={handleConfirmPendingReserve}
+                    disabled={isSubmittingReserve}
+                    activeOpacity={0.85}
                   >
-                    <Feather name="plus" size={16} color="#0F172A" />
+                    {isSubmittingReserve ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
+                    )}
+                    <Text style={styles.btnConfirmReserveMainText}>
+                      Reserve Seats Pendingly & Send WhatsApp ➔
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              )}
 
-              {/* Pickup Location Selector */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Boarding / Pickup Stop</Text>
-                <View style={styles.pickupPillsGrid}>
-                  {[
-                    'Thambuththegama Central Depot',
-                    'Thalawa Junction',
-                    'Anuradhapura Stand',
-                    'Vavuniya Rest Stop',
-                  ].map((stop) => (
-                    <TouchableOpacity
-                      key={stop}
+              {/* SECTION B: WHEN CONDUCTOR TAPS AN EXISTING BOOKED / PENDING SEAT */}
+              {inspectedSeatReservation && selectedSeatsForBooking.length === 0 && (
+                <View
+                  style={[
+                    styles.inspectedSeatCard,
+                    inspectedSeatReservation.status === 'PENDING_PAYMENT'
+                      ? styles.inspectedSeatCardPending
+                      : styles.inspectedSeatCardConfirmed,
+                  ]}
+                >
+                  <View style={styles.inspectedTopRow}>
+                    <View>
+                      <Text style={styles.inspectedName}>
+                        {inspectedSeatReservation.customerName}
+                      </Text>
+                      <Text style={styles.inspectedSub}>
+                        📞 {inspectedSeatReservation.phone} • {inspectedSeatReservation.pickup}
+                      </Text>
+                      <Text style={styles.inspectedSeats}>
+                        Seats: {inspectedSeatReservation.seats.join(', ')} • Fare: LKR{' '}
+                        {inspectedSeatReservation.amount.toLocaleString()}
+                      </Text>
+                    </View>
+
+                    <View
                       style={[
-                        styles.pickupPill,
-                        callerPickup === stop && styles.pickupPillActive,
+                        styles.inspectedBadge,
+                        inspectedSeatReservation.status === 'PENDING_PAYMENT'
+                          ? styles.badgePending
+                          : styles.badgeConfirmed,
                       ]}
-                      onPress={() => setCallerPickup(stop)}
                     >
                       <Text
-                        style={[
-                          styles.pickupPillText,
-                          callerPickup === stop && styles.pickupPillTextActive,
-                        ]}
+                        style={
+                          inspectedSeatReservation.status === 'PENDING_PAYMENT'
+                            ? styles.badgePendingText
+                            : styles.badgeConfirmedText
+                        }
                       >
-                        {stop}
+                        {inspectedSeatReservation.status === 'PENDING_PAYMENT'
+                          ? 'Pending Slip'
+                          : 'Permanently Reserved'}
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+                    </View>
+                  </View>
 
-              {/* Automatic Fare & Bank Notice Summary Box */}
-              <View style={styles.summaryNoticeBox}>
-                <View style={styles.summaryPriceRow}>
-                  <Text style={styles.summaryPriceLabel}>Total Provisional Fare:</Text>
-                  <Text style={styles.summaryPriceValue}>
-                    LKR {(callerSeatsCount * FARE_PER_SEAT).toLocaleString()}
-                  </Text>
-                </View>
+                  {/* Actions for this inspected reservation */}
+                  {inspectedSeatReservation.status === 'PENDING_PAYMENT' ? (
+                    <View style={styles.inspectedActionsRow}>
+                      <TouchableOpacity
+                        style={styles.btnSecondaryWa}
+                        onPress={() => {
+                          const msg = `🚌 *PNG EXPRESS - BANK DETAILS REMINDER*
 
-                <View style={styles.summaryBankNoticeRow}>
-                  <Ionicons name="information-circle" size={15} color="#006FD8" />
-                  <Text style={styles.summaryBankNoticeText}>
-                    PNG Commercial Bank account details will automatically open in WhatsApp upon
-                    confirming pending reservation.
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
+Dear ${inspectedSeatReservation.customerName},
+Please transfer LKR ${inspectedSeatReservation.amount.toLocaleString()} to our Commercial Bank Account (1000 8492 8821, PNG Express Pvt Ltd) to confirm your Seats ${inspectedSeatReservation.seats.join(
+                            ', '
+                          )}. Reply with slip to get your digital QR ticket.`;
+                          sendWhatsAppMessage(inspectedSeatReservation.phone, msg);
+                        }}
+                      >
+                        <Ionicons name="logo-whatsapp" size={14} color="#006FD8" />
+                        <Text style={styles.btnSecondaryWaText}>Re-send Bank Info</Text>
+                      </TouchableOpacity>
 
-            {/* Confirm Pending Reserve Button */}
-            <TouchableOpacity
-              style={styles.btnConfirmReserveMain}
-              onPress={handleCreatePendingReserve}
-              disabled={isSubmittingReserve}
-              activeOpacity={0.85}
-            >
-              {isSubmittingReserve ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
+                      <TouchableOpacity
+                        style={styles.btnPrimaryVerify}
+                        onPress={() =>
+                          handleInitiatePaymentVerification(inspectedSeatReservation)
+                        }
+                      >
+                        <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" />
+                        <Text style={styles.btnPrimaryVerifyText}>Verify & Permanent Reserve</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.inspectedActionsRow}>
+                      <TouchableOpacity
+                        style={styles.btnViewQrSmall}
+                        onPress={() => {
+                          setActiveConfirmedRes(inspectedSeatReservation);
+                          setShowQrModal(true);
+                        }}
+                      >
+                        <Ionicons name="qr-code" size={14} color="#006FD8" />
+                        <Text style={styles.btnViewQrSmallText}>View Ticket QR</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.btnShareQrWa}
+                        onPress={() => {
+                          const passMsg = `✅ *PNG EXPRESS - CONFIRMED TICKET QR PASS*
+
+Dear ${inspectedSeatReservation.customerName},
+Your confirmed ticket for ${formatDisplayDate(selectedDate)}:
+• Ticket: *${inspectedSeatReservation.ticketRef}*
+• Seats: *Seats ${inspectedSeatReservation.seats.join(', ')}*
+• Digital QR Ticket: https://pngexpress.lk/ticket/${inspectedSeatReservation.ticketRef}`;
+                          sendWhatsAppMessage(inspectedSeatReservation.phone, passMsg);
+                        }}
+                      >
+                        <Ionicons name="share-social" size={14} color="#059669" />
+                        <Text style={styles.btnShareQrWaText}>Send QR to WhatsApp</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               )}
-              <Text style={styles.btnConfirmReserveMainText}>
-                Confirm Pending Reserve & Send Bank Info ➔
-              </Text>
-            </TouchableOpacity>
+
+              {/* Friendly empty selection hint */}
+              {selectedSeatsForBooking.length === 0 && !inspectedSeatReservation && (
+                <View style={styles.tapToSelectHintBox}>
+                  <Ionicons name="hand-left-outline" size={18} color="#64748B" />
+                  <Text style={styles.tapToSelectHintText}>
+                    Tap any vacant seat above to select and reserve for a customer caller.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
       {/* ============================================================= */}
-      {/* MODAL 2: VERIFY PAYMENT & PERMANENTLY RESERVE (SEND QR PASS)  */}
+      {/* POP-UP WINDOW 2: VERIFY PAYMENT & PERMANENTLY RESERVE (QR)     */}
       {/* ============================================================= */}
       <Modal
         visible={showVerifyModal}
@@ -1208,14 +1165,12 @@ Please show this to the bus conductor at boarding.`;
             {/* Header */}
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={[styles.modalCallIconCircle, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                <View style={[styles.modalBusIconCircle, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
                   <Ionicons name="checkmark-done" size={18} color="#059669" />
                 </View>
                 <View>
                   <Text style={styles.modalHeaderTitle}>Verify Payment & Confirm</Text>
-                  <Text style={styles.modalHeaderSub}>
-                    Permanent seat issuance & QR dispatch
-                  </Text>
+                  <Text style={styles.modalHeaderSub}>Permanent reserve & send QR code</Text>
                 </View>
               </View>
 
@@ -1227,33 +1182,29 @@ Please show this to the bus conductor at boarding.`;
               </TouchableOpacity>
             </View>
 
-            {/* Passenger Info & Verification Details */}
-            {activePendingRes && (
+            {activePendingToVerify && (
               <View style={styles.verificationCardContent}>
                 <View style={styles.verifyCustomerBox}>
                   <Text style={styles.verifyCustomerName}>
-                    {activePendingRes.customerName}
+                    {activePendingToVerify.customerName}
                   </Text>
                   <Text style={styles.verifyCustomerSub}>
-                    WhatsApp: {activePendingRes.phone} • Travel Date:{' '}
-                    {formatDisplayDate(selectedDate)}
+                    WhatsApp: {activePendingToVerify.phone} • Date: {formatDisplayDate(selectedDate)}
                   </Text>
                   <Text style={styles.verifySeatsText}>
-                    Assigned: Seats {activePendingRes.seats.join(', ')} ({activePendingRes.seatCount} Seat{activePendingRes.seatCount > 1 ? 's' : ''})
+                    Seats: {activePendingToVerify.seats.join(', ')} • Pickup: {activePendingToVerify.pickup}
                   </Text>
                 </View>
 
-                {/* Amount to Verify */}
                 <View style={styles.verifyAmountBox}>
-                  <Text style={styles.verifyAmountLabel}>Payment Amount to Verify:</Text>
+                  <Text style={styles.verifyAmountLabel}>Payment Amount Verified:</Text>
                   <Text style={styles.verifyAmountNumber}>
-                    LKR {activePendingRes.amount.toLocaleString()}
+                    LKR {activePendingToVerify.amount.toLocaleString()}
                   </Text>
                 </View>
 
-                {/* Bank Slip Reference Input */}
                 <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Bank Transfer Slip / Receipt Reference</Text>
+                  <Text style={styles.formLabel}>Bank Slip / Receipt Reference</Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="e.g. Commercial Bank Slip #CB-9912"
@@ -1261,23 +1212,18 @@ Please show this to the bus conductor at boarding.`;
                     value={bankSlipRef}
                     onChangeText={setBankSlipRef}
                   />
-                  <Text style={styles.inputHelpText}>
-                    Enter the slip number or transaction reference sent by the passenger.
-                  </Text>
                 </View>
 
-                {/* Action notice */}
                 <View style={styles.qrDispatchNotice}>
                   <Ionicons name="qr-code" size={18} color="#006FD8" />
                   <Text style={styles.qrDispatchNoticeText}>
-                    Upon confirmation, these seats are permanently booked and an official digital
-                    ticket with a unique QR code will be dispatched to the customer's WhatsApp.
+                    Clicking confirm will permanently lock these seats and automatically dispatch
+                    the official Digital Ticket QR Pass to the customer via WhatsApp.
                   </Text>
                 </View>
               </View>
             )}
 
-            {/* Confirm & Send QR Button */}
             <TouchableOpacity
               style={styles.btnConfirmPaymentMain}
               onPress={handleConfirmPermanentBooking}
@@ -1298,7 +1244,7 @@ Please show this to the bus conductor at boarding.`;
       </Modal>
 
       {/* ============================================================= */}
-      {/* MODAL 3: VIEW OFFICIAL DIGITAL TICKET & QR CODE PASS          */}
+      {/* POP-UP WINDOW 3: VIEW OFFICIAL DIGITAL TICKET & QR CODE PASS  */}
       {/* ============================================================= */}
       <Modal
         visible={showQrModal}
@@ -1319,13 +1265,13 @@ Please show this to the bus conductor at boarding.`;
             {/* Header */}
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={styles.modalQrIconCircle}>
+                <View style={styles.modalBusIconCircle}>
                   <Ionicons name="qr-code" size={18} color="#006FD8" />
                 </View>
                 <View>
                   <Text style={styles.modalHeaderTitle}>Digital Ticket Pass</Text>
                   <Text style={styles.modalHeaderSub}>
-                    {activeConfirmedRes?.ticketRef || 'Official QR Pass'}
+                    {activeConfirmedRes?.ticketRef || 'Official Ticket'}
                   </Text>
                 </View>
               </View>
@@ -1338,10 +1284,8 @@ Please show this to the bus conductor at boarding.`;
               </TouchableOpacity>
             </View>
 
-            {/* QR Card Container */}
             {activeConfirmedRes && (
               <View style={styles.ticketCardContainer}>
-                {/* Verified Green Banner */}
                 <View style={styles.ticketVerifiedBanner}>
                   <Ionicons name="checkmark-circle" size={16} color="#059669" />
                   <Text style={styles.ticketVerifiedBannerText}>
@@ -1349,7 +1293,7 @@ Please show this to the bus conductor at boarding.`;
                   </Text>
                 </View>
 
-                {/* QR Code Graphic */}
+                {/* QR Code Image */}
                 <View style={styles.qrCodeWrapper}>
                   <Image
                     source={{
@@ -1361,7 +1305,7 @@ Please show this to the bus conductor at boarding.`;
                   <Text style={styles.qrPassTokenText}>{activeConfirmedRes.ticketRef}</Text>
                 </View>
 
-                {/* Ticket Details */}
+                {/* Info List */}
                 <View style={styles.ticketInfoList}>
                   <View style={styles.ticketInfoRow}>
                     <Text style={styles.ticketInfoLabel}>Passenger Name:</Text>
@@ -1393,18 +1337,10 @@ Please show this to the bus conductor at boarding.`;
                     <Text style={styles.ticketInfoLabel}>Pickup Location:</Text>
                     <Text style={styles.ticketInfoValue}>{activeConfirmedRes.pickup}</Text>
                   </View>
-
-                  <View style={styles.ticketInfoRow}>
-                    <Text style={styles.ticketInfoLabel}>Payment Slip:</Text>
-                    <Text style={styles.ticketInfoValueSlip}>
-                      {activeConfirmedRes.bankRef || 'Verified'}
-                    </Text>
-                  </View>
                 </View>
               </View>
             )}
 
-            {/* Action to share via WhatsApp */}
             <TouchableOpacity
               style={styles.btnResendQrMain}
               onPress={() => {
@@ -1453,7 +1389,7 @@ const styles = StyleSheet.create({
       : {}),
   },
 
-  // 1. Top Profile Bar
+  // 1. Top Bar
   topProfileBar: {
     width: '100%',
     flexDirection: 'row',
@@ -1495,7 +1431,7 @@ const styles = StyleSheet.create({
     color: '#006FD8',
   },
 
-  // 2. Unlocked Week Notice Card
+  // 2. Week Notice
   weekNoticeCard: {
     width: '100%',
     flexDirection: 'row',
@@ -1528,7 +1464,7 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
 
-  // 3. Fast Current Week Carousel
+  // 3. Fast Week Carousel
   weekCarouselScroll: {
     width: '100%',
     marginBottom: 14,
@@ -1546,7 +1482,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    position: 'relative',
   },
   weekDayPillSelected: {
     backgroundColor: '#006FD8',
@@ -1750,7 +1685,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
 
-  // 5. Selected Date Summary Card
+  // 5. Selected Day Card
   dateActionCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
@@ -1764,7 +1699,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
   },
   selectedDateHeadline: {
     fontSize: 15,
@@ -1776,342 +1710,51 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  btnOpenCallIn: {
+  btnOpenBusSeating: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#006FD8',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
     borderRadius: 10,
   },
-  btnOpenCallInText: {
+  btnOpenBusSeatingText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
-  seatMetricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  seatMetricBox: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  seatMetricLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  seatMetricValueBold: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  seatMetricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#E2E8F0',
-  },
 
-  // 6. Filter Segment
-  filterSegmentRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
-  },
-  filterSegmentBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  filterSegmentBtnActive: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  filterSegmentText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  filterSegmentTextActive: {
-    color: '#006FD8',
-  },
-
-  // 7. Booking Cards
-  reservationsListWrapper: {
-    width: '100%',
-  },
-  emptyBookingsCard: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyBookingsTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 8,
-  },
-  emptyBookingsSub: {
-    fontSize: 11,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 3,
-    marginBottom: 14,
-  },
-  emptyAddBtn: {
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  emptyAddBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#006FD8',
-  },
-  bookingCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1.5,
-  },
-  bookingCardPending: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFDF5',
-  },
-  bookingCardConfirmed: {
-    borderColor: '#E2E8F0',
-  },
-  bookingCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  customerNameMain: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  badgePending: {
-    backgroundColor: '#FEF3C7',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  badgePendingText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#B45309',
-  },
-  badgeConfirmed: {
-    backgroundColor: '#ECFDF5',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  badgeConfirmedText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#047857',
-  },
-  customerPhoneSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  iconChatBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F0FDF4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  bookingDetailsBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    gap: 4,
-    marginBottom: 10,
-  },
-  bookingDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bookingDetailLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  bookingDetailValue: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  bookingDetailValueSeats: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#006FD8',
-  },
-  bookingDetailValueFare: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#059669',
-  },
-  bookingDetailValueTicket: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#6366F1',
-  },
-  pendingActionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  btnResendBankInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  btnResendBankInfoText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#006FD8',
-  },
-  btnVerifyPaymentMain: {
-    flex: 1.2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#059669',
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  btnVerifyPaymentMainText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  confirmedActionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  btnViewQrPass: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  btnViewQrPassText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#006FD8',
-  },
-  btnResendQrWa: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#F0FDF4',
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  btnResendQrWaText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#059669',
-  },
-
-  // Modals Styling
+  // BUS SEATING POPUP MODAL
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 14,
   },
-  modalCard: {
+  busModalCard: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 440,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
+    padding: 18,
     shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 24,
+    elevation: 10,
   },
   modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     paddingBottom: 10,
   },
-  modalCallIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  modalQrIconCircle: {
+  modalBusIconCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -2122,7 +1765,7 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   modalHeaderTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
@@ -2131,121 +1774,248 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
+
+  // Bus Legend
+  busLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  busLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  seatLegendBox: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+  },
+  seatLegendAvailable: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+  },
+  seatLegendSelected: {
+    backgroundColor: '#006FD8',
+  },
+  seatLegendPending: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  seatLegendConfirmed: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+  },
+  busLegendLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+
+  // Front Cabin
+  frontCabinBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingVertical: 5,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  frontCabinText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+
+  // Coach Body
+  busCoachBody: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  seatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 3,
+  },
+  seatPair: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  aisleGap: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aisleText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  seatItem: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  seatAvailable: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+  },
+  seatSelected: {
+    backgroundColor: '#006FD8',
+    borderWidth: 1.5,
+    borderColor: '#005BB5',
+  },
+  seatPending: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  seatConfirmed: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+  },
+  seatNumberText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  seatNumberTextWhite: {
+    color: '#FFFFFF',
+  },
+  seatNumberTextPending: {
+    color: '#B45309',
+  },
+  seatNumberTextConfirmed: {
+    color: '#047857',
+  },
+  seatMiniBadge: {
+    fontSize: 8,
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    color: '#0F172A',
+  },
+
+  // Reservation Form Inside Popup
+  reservationFormBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    marginTop: 8,
+  },
+  reservationFormHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DBEAFE',
+    paddingBottom: 6,
+  },
+  reservationFormTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
   formGroup: {
-    marginBottom: 14,
+    marginBottom: 10,
   },
   formLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   formInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 13,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 12,
     color: '#0F172A',
   },
   inputHelpText: {
     fontSize: 10,
     color: '#64748B',
-    marginTop: 4,
-    lineHeight: 14,
-  },
-  counterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  counterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  counterDisplay: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  counterNumberText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#006FD8',
-  },
-  counterUnitText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
+    marginTop: 3,
   },
   pickupPillsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   pickupPill: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    borderRadius: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
   },
   pickupPillActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#006FD8',
     borderColor: '#006FD8',
   },
   pickupPillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: '#475569',
   },
   pickupPillTextActive: {
-    color: '#006FD8',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
-  summaryNoticeBox: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 14,
-  },
-  summaryPriceRow: {
+  fareNoticeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    backgroundColor: '#DBEAFE',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
   },
-  summaryPriceLabel: {
-    fontSize: 12,
+  fareNoticeLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#0369A1',
+    color: '#1E40AF',
   },
-  summaryPriceValue: {
-    fontSize: 16,
+  fareNoticeValue: {
+    fontSize: 15,
     fontWeight: '900',
-    color: '#0284C7',
+    color: '#1E3A8A',
   },
-  summaryBankNoticeRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'flex-start',
-  },
-  summaryBankNoticeText: {
+  fareNoticeSub: {
     fontSize: 10,
-    color: '#0284C7',
-    flex: 1,
-    lineHeight: 14,
+    fontWeight: '700',
+    color: '#2563EB',
   },
   btnConfirmReserveMain: {
     flexDirection: 'row',
@@ -2253,62 +2023,220 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#006FD8',
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
   },
   btnConfirmReserveMainText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
 
-  // Verify Modal Content
+  // Inspected Seat Details
+  inspectedSeatCard: {
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    marginTop: 8,
+  },
+  inspectedSeatCardPending: {
+    backgroundColor: '#FFFDF5',
+    borderColor: '#FDE68A',
+  },
+  inspectedSeatCardConfirmed: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  inspectedTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  inspectedName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  inspectedSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  inspectedSeats: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#006FD8',
+    marginTop: 3,
+  },
+  inspectedBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  badgePending: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  badgePendingText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  badgeConfirmed: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  badgeConfirmedText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  inspectedActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  btnSecondaryWa: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnSecondaryWaText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  btnPrimaryVerify: {
+    flex: 1.3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  btnPrimaryVerifyText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  btnViewQrSmall: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  btnViewQrSmallText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#006FD8',
+  },
+  btnShareQrWa: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  btnShareQrWaText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+
+  tapToSelectHintBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
+  tapToSelectHintText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+
+  // Modal Card Generic
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
   verificationCardContent: {
     marginBottom: 12,
   },
   verifyCustomerBox: {
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   verifyCustomerName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
   },
   verifyCustomerSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
     marginTop: 2,
   },
   verifySeatsText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#006FD8',
-    marginTop: 4,
+    marginTop: 3,
   },
   verifyAmountBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#ECFDF5',
-    padding: 12,
+    padding: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#A7F3D0',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   verifyAmountLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#065F46',
   },
   verifyAmountNumber: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
     color: '#047857',
   },
@@ -2318,15 +2246,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: '#EFF6FF',
     borderRadius: 10,
-    padding: 10,
+    padding: 8,
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
   qrDispatchNoticeText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#1E40AF',
     flex: 1,
-    lineHeight: 15,
+    lineHeight: 14,
   },
   btnConfirmPaymentMain: {
     flexDirection: 'row',
@@ -2334,24 +2262,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#059669',
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 10,
     marginTop: 6,
   },
   btnConfirmPaymentMainText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
 
-  // QR Modal Content
+  // QR Modal
   ticketCardContainer: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   ticketVerifiedBanner: {
     flexDirection: 'row',
@@ -2359,14 +2287,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#ECFDF5',
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 6,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   ticketVerifiedBannerText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: '#047857',
   },
@@ -2374,26 +2302,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    padding: 14,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   qrCodeImage: {
-    width: 150,
-    height: 150,
+    width: 140,
+    height: 140,
   },
   qrPassTokenText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 6,
-    letterSpacing: 0.5,
+    marginTop: 4,
   },
   ticketInfoList: {
-    gap: 5,
+    gap: 4,
   },
   ticketInfoRow: {
     flexDirection: 'row',
@@ -2401,29 +2328,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ticketInfoLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
     fontWeight: '600',
   },
   ticketInfoValue: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#0F172A',
   },
   ticketInfoValueBold: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#0F172A',
   },
   ticketInfoValueSeats: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#006FD8',
-  },
-  ticketInfoValueSlip: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#059669',
   },
   btnResendQrMain: {
     flexDirection: 'row',
@@ -2431,12 +2353,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#25D366',
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 10,
   },
   btnResendQrMainText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
 });
